@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact Resistance Test Kit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Layout: a lab bench. 3D model fills the stage, a spec sheet panel sits beside it (below on phones). */
+  --bench: #11161d;
+  --panel: #171e27;
+  --line: #2a3542;
+  --ink: #e6ebf0;
+  --muted: #8d9aa8;
+  --brass: #d9a441;
+  --red: #c8343b;
+  --ok: #4fb286;
+  --bad: #e2574c;
+  --display: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bench);
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 14px;
+  line-height: 1.45;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  overflow: hidden;
+}
+#stage { position: relative; min-height: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#hud {
+  position: absolute; left: 16px; right: 16px; top: 14px;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; pointer-events: none;
+}
+#hud > * { pointer-events: auto; }
+.btn {
+  font: 500 13px var(--display);
+  color: var(--ink);
+  background: rgba(23, 30, 39, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--brass); }
+.btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.btn.primary { background: var(--brass); color: #1a1408; border-color: var(--brass); }
+.btn[aria-pressed="true"] { border-color: var(--brass); color: var(--brass); }
+.sep { width: 1px; height: 22px; background: var(--line); }
+#tip {
+  position: absolute; left: 16px; bottom: 14px;
+  font: 12px var(--mono); color: var(--muted);
+  background: rgba(17, 22, 29, 0.8); padding: 4px 8px; border-radius: 4px;
+}
+#hover {
+  position: absolute; pointer-events: none; display: none;
+  font: 500 12px var(--display); background: var(--panel); color: var(--ink);
+  border: 1px solid var(--brass); border-radius: 4px; padding: 3px 7px; white-space: nowrap;
+}
+aside {
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  overflow-y: auto;
+  padding: 22px 22px 28px;
+  display: flex; flex-direction: column; gap: 22px;
+}
+h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-size: 12px; font-weight: 600; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.sub { color: var(--muted); margin: 6px 0 0; }
+.chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.chip { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+.chip b { display: block; font: 500 16px var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+.chip span { font-size: 11px; color: var(--muted); }
+#info { border: 1px solid var(--line); border-left: 3px solid var(--brass); border-radius: 6px; padding: 12px 14px; }
+#info h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+#info .ref { font: 12px var(--mono); color: var(--brass); }
+#info p { margin: 6px 0 0; color: var(--ink); }
+.parts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.parts button {
+  width: 100%; text-align: left; background: none; border: 0; color: var(--ink);
+  font: 13px var(--display); padding: 6px 8px; border-radius: 4px; cursor: pointer;
+  display: flex; justify-content: space-between; gap: 8px;
+}
+.parts button span { font: 12px var(--mono); color: var(--muted); }
+.parts button:hover, .parts button.on { background: #212b37; }
+.parts button:focus-visible { outline: 2px solid var(--brass); }
+.scanhead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.scanhead b { font: 500 13px var(--mono); }
+#bars { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; height: 92px; align-items: end; position: relative; }
+#bars .bar { background: var(--ok); border-radius: 2px 2px 0 0; min-height: 2px; transition: height .3s; }
+#bars .bar.bad { background: var(--bad); }
+#limit { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--bad); pointer-events: none; }
+#limit span { position: absolute; right: 0; top: -15px; font: 10px var(--mono); color: var(--bad); }
+.pins { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; font: 9px var(--mono); color: var(--muted); text-align: center; margin-top: 3px; }
+.note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+td { padding: 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:last-child { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+@media (max-width: 820px) {
+  body { grid-template-columns: 1fr; grid-template-rows: 58% 42%; }
+  aside { border-left: 0; border-top: 1px solid var(--line); padding: 16px; }
+  #hud { left: 10px; right: 10px; top: 10px; gap: 6px; }
+  .btn { padding: 6px 9px; font-size: 12px; }
+  #tip { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { #bars .bar { transition: none; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage">
+  <div id="hud">
+    <button class="btn primary" id="cycle" type="button">Plug / unplug once</button>
+    <button class="btn" id="auto" type="button" aria-pressed="false">Auto cycle</button>
+    <span class="sep" aria-hidden="true"></span>
+    <button class="btn" data-view="overview" type="button">Overview</button>
+    <button class="btn" data-view="main" type="button">Main board</button>
+    <button class="btn" data-view="jack" type="button">Connector</button>
+  </div>
+  <div id="hover"></div>
+  <div id="tip">Drag to rotate · scroll or pinch to zoom · click a part</div>
+</div>
+
+<aside>
+  <header>
+    <h1>Contact Resistance Test Kit</h1>
+    <p class="sub">Measures the mated resistance of all 16 contacts of an ITW McMurdo RP16-T / RS16P-T connector after every plug/unplug cycle.</p>
+  </header>
+
+  <div class="chips">
+    <div class="chip"><b>16</b><span>contacts scanned</span></div>
+    <div class="chip"><b>0.62 A</b><span>test current</span></div>
+    <div class="chip"><b>0–51 mΩ</b><span>range at G = 101</span></div>
+    <div class="chip"><b>10 mΩ</b><span>fail limit</span></div>
+    <div class="chip"><b>500</b><span>rated cycles</span></div>
+    <div class="chip"><b>≈1 s</b><span>per full scan</span></div>
+  </div>
+
+  <section id="info" aria-live="polite">
+    <span class="ref">KIT</span>
+    <h3>Complete kit</h3>
+    <p>Click any part in the model or the list below to see what it does.</p>
+  </section>
+
+  <section>
+    <div class="scanhead"><h2 style="margin:0">Example scan</h2><b id="cyc">cycle 0</b></div>
+    <div id="bars"><div id="limit"><span>10 mΩ</span></div></div>
+    <div class="pins" id="pins"></div>
+    <p class="note">Simulated values to show the readout. The real kit logs <code>cycle, pin, I_A, V_mV, R_mOhm</code> over USB serial.</p>
+  </section>
+
+  <section>
+    <h2>Parts in the model</h2>
+    <ul class="parts" id="partlist"></ul>
+  </section>
+
+  <section>
+    <h2>Boards</h2>
+    <table>
+      <tr><td>Main board, 2-layer, 2 oz</td><td>100 × 80 mm</td></tr>
+      <tr><td>Male jack board (RP16-T)</td><td>80 × 40 mm</td></tr>
+      <tr><td>Female jack board (RS16P-T)</td><td>80 × 40 mm</td></tr>
+      <tr><td>Ribbon cables, 34-way</td><td>2 × 30 cm</td></tr>
+      <tr><td>Board gap when mated</td><td>32.9 mm</td></tr>
+    </table>
+  </section>
+</aside>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+const PARTS = {
+  kit:      { ref: "KIT", name: "Complete kit", text: "Main board, two jack boards, two ribbon cables and a plug/unplug fixture on one base plate." },
+  main:     { ref: "PCB-1", name: "Main board", text: "100 × 80 mm, 2-layer, 2 oz copper. Power on the left, pin switches in the middle, analog front end and ESP32 on the right." },
+  esp32:    { ref: "MCU", name: "ESP32-DevKitC V4", text: "Runs the scan: selects a pin, pulses the test current, reads the ADC and sends one CSV line per pin over USB." },
+  acs:      { ref: "U1", name: "ACS712-05B current sensor", text: "Hall-effect sensor in the test-current path, 185 mV/A. Gives the current I for R = V / I." },
+  fets:     { ref: "Q1–Q16", name: "Pin select MOSFETs", text: "16 × AO3400A, one per contact. Only one is on at a time, driven by two 74HC595 shift registers." },
+  sr:       { ref: "U2, U3", name: "74HC595 shift registers", text: "Daisy-chained; 16 outputs drive the MOSFET gates. Output enable has a pull-up so all pins stay off at boot." },
+  mux:      { ref: "U4, U5", name: "CD74HC4067 sense muxes", text: "Select the Kelvin sense taps of pin n on the female and male sides." },
+  ina:      { ref: "U6", name: "INA333 amplifier", text: "Amplifies the voltage across the contact by 101 (or 11 with JP1) for the ADC." },
+  adc:      { ref: "U8", name: "ADS1115 16-bit ADC", text: "Reads the contact voltage, the ACS712 output and the 5 V rail over I²C." },
+  res:      { ref: "R_HI, R_LO", name: "5 W wirewound resistors", text: "5.6 Ω and 2.2 Ω set the test current to about 0.62 A and keep the contact at about 1.4 V for the INA333." },
+  power:    { ref: "J1, U7, C1", name: "Power input", text: "5 V 2 A barrel jack, polyfuse, TVS, 470 µF bulk and a 3.3 V LDO for the analog parts." },
+  idc:      { ref: "J2, J3", name: "34-way IDC headers", text: "One per jack board: odd pins carry the force current, even pins the sense line, for each of the 16 contacts." },
+  ribbon:   { ref: "W1, W2", name: "Ribbon cables", text: "34-way, 28 AWG, about 30 cm. Force and sense run on neighbouring wires." },
+  male:     { ref: "PCB-2", name: "Male jack board", text: "Holds the RP16-T plug on 7.1 mm standoffs. Each pad has a force trace and a separate sense trace." },
+  female:   { ref: "PCB-3", name: "Female jack board", text: "Holds the RS16P-T socket on 7.9 mm standoffs. Fixed to the fixture." },
+  plug:     { ref: "J_JACK", name: "RP16-T plug (device under test)", text: "ITW McMurdo Red Range, 16 way, 2 rows × 8 at 4.70 mm pitch. Rated 5 mΩ initially, 10 mΩ after conditioning, 500 cycles." },
+  socket:   { ref: "J_JACK", name: "RS16P-T socket (device under test)", text: "Mates with the plug. Pin n meets pin n; the plate sits 14.49 mm from the plug plate when mated." },
+  fixture:  { ref: "FIX", name: "Plug/unplug fixture", text: "The male board rides a carriage on a linear rail. Push the handle to mate, pull to unmate." },
+  sw:       { ref: "J4", name: "Mate-detect microswitch", text: "Closes when the carriage reaches the mated position. Each closure counts one cycle and starts a scan." },
+};
+const LIST = ["main","esp32","acs","fets","sr","mux","ina","adc","res","power","idc","ribbon","male","female","plug","socket","fixture","sw"];
+
+// ---------- renderer / scene ----------
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x11161d);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(35, 1, 1, 3000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.minDistance = 60;
+controls.maxDistance = 900;
+
+scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x1a1f26, 0.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(-120, 260, 160);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -200, right: 200, top: 160, bottom: -160, near: 50, far: 600 });
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+// ---------- materials ----------
+const M = {
+  alu:    new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 0.7, roughness: 0.45 }),
+  aluDark:new THREE.MeshStandardMaterial({ color: 0x5c6670, metalness: 0.6, roughness: 0.5 }),
+  steel:  new THREE.MeshStandardMaterial({ color: 0xc9ced3, metalness: 0.9, roughness: 0.25 }),
+  gold:   new THREE.MeshStandardMaterial({ color: 0xe0b14a, metalness: 1.0, roughness: 0.25 }),
+  brass:  new THREE.MeshStandardMaterial({ color: 0xb8913f, metalness: 0.9, roughness: 0.35 }),
+  dap:    new THREE.MeshStandardMaterial({ color: 0xa8262c, roughness: 0.55 }),
+  black:  new THREE.MeshStandardMaterial({ color: 0x1b1d20, roughness: 0.6 }),
+  ic:     new THREE.MeshStandardMaterial({ color: 0x151617, roughness: 0.45 }),
+  grey:   new THREE.MeshStandardMaterial({ color: 0x6d737a, roughness: 0.7 }),
+  ceramic:new THREE.MeshStandardMaterial({ color: 0xece6d8, roughness: 0.8 }),
+  cap:    new THREE.MeshStandardMaterial({ color: 0x23324a, roughness: 0.4, metalness: 0.2 }),
+  pcbEdge:new THREE.MeshStandardMaterial({ color: 0x0e3b26, roughness: 0.6 }),
+  espPcb: new THREE.MeshStandardMaterial({ color: 0x14171a, roughness: 0.5 }),
+  led:    new THREE.MeshStandardMaterial({ color: 0x3dff8a, emissive: 0x1aa556, emissiveIntensity: 1.2 }),
+  knob:   new THREE.MeshStandardMaterial({ color: 0xc8343b, roughness: 0.4 }),
+};
+
+const pickables = [];
+const partMeshes = {};
+function tag(obj, part) {
+  obj.traverse(o => {
+    if (o.isMesh) {
+      o.userData.part = part;
+      o.castShadow = true; o.receiveShadow = true;
+      pickables.push(o);
+      (partMeshes[part] ||= []).push(o);
+    }
+  });
+  return obj;
+}
+function box(w, h, d, mat, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z); return m;
+}
+function cyl(r, h, mat, x = 0, y = 0, z = 0, seg = 24) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, seg), mat);
+  m.position.set(x, y, z); return m;
+}
+
+// ---------- canvas textures ----------
+function mainBoardTexture() {
+  const c = document.createElement("canvas"); c.width = 1000; c.height = 800;
+  const g = c.getContext("2d");
+  g.fillStyle = "#0f5132"; g.fillRect(0, 0, 1000, 800);
+  // copper traces under mask
+  g.strokeStyle = "#1c6b45"; g.lineCap = "round";
+  g.lineWidth = 14;
+  [[60,650,300,650],[300,650,520,560],[520,560,620,560],[620,560,670,400],[670,400,670,200]].forEach(([a,b,cc,d]) => { g.beginPath(); g.moveTo(a,b); g.lineTo(cc,d); g.stroke(); });
+  g.lineWidth = 3;
+  for (let i = 0; i < 16; i++) { const y = 210 + i * 25; g.beginPath(); g.moveTo(690, y); g.lineTo(790, y); g.lineTo(830, 200 + i * 25); g.stroke(); }
+  for (let i = 0; i < 16; i++) { const y = 210 + i * 25; g.beginPath(); g.moveTo(560, 330 + i * 4); g.lineTo(650, y); g.stroke(); }
+  for (let i = 0; i < 10; i++) { g.beginPath(); g.moveTo(300 + i * 12, 470); g.lineTo(300 + i * 12, 560); g.lineTo(420, 600 + i * 6); g.stroke(); }
+  // pads for IDC headers
+  g.fillStyle = "#c9a14a";
+  // silkscreen
+  g.fillStyle = "#e8ecef"; g.strokeStyle = "#e8ecef"; g.lineWidth = 2;
+  g.font = "600 26px IBM Plex Mono, monospace";
+  g.fillText("CR-TEST MAIN  v0.1", 40, 50);
+  g.font = "18px IBM Plex Mono, monospace";
+  const lbl = (t, x, y) => g.fillText(t, x, y);
+  lbl("J1 5V", 14, 590); lbl("U7", 150, 560); lbl("C1", 70, 520);
+  lbl("R_HI 5.6R 5W", 250, 770); lbl("R_LO 2.2R 5W", 470, 770);
+  lbl("U1 ACS712", 520, 615); lbl("Q1-Q16", 640, 175); lbl("U2", 545, 300); lbl("U3", 545, 500);
+  lbl("U4 4067", 235, 440); lbl("U5 4067", 235, 585); lbl("U6", 418, 470); lbl("U8", 418, 545);
+  lbl("J2 FEMALE", 905, 140); lbl("J3 MALE", 770, 140); lbl("JP1 G101/G11", 330, 650);
+  lbl("J4", 30, 150); lbl("LED1", 120, 150); lbl("TP", 200, 650);
+  g.strokeRect(5, 5, 990, 790);
+  // test points
+  g.fillStyle = "#c9a14a";
+  for (let i = 0; i < 9; i++) { g.beginPath(); g.arc(200 + i * 26, 670, 6, 0, Math.PI * 2); g.fill(); }
+  // mounting hole rings
+  [[35,35],[965,35],[35,765],[965,765]].forEach(([x,y]) => { g.beginPath(); g.arc(x, y, 26, 0, Math.PI * 2); g.fill(); g.fillStyle = "#11161d"; g.beginPath(); g.arc(x, y, 16, 0, Math.PI * 2); g.fill(); g.fillStyle = "#c9a14a"; });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+function jackBoardTexture(label, sub) {
+  const c = document.createElement("canvas"); c.width = 800; c.height = 400;
+  const g = c.getContext("2d");
+  g.fillStyle = "#0f5132"; g.fillRect(0, 0, 800, 400);
+  g.strokeStyle = "#1c6b45"; g.lineWidth = 6;
+  for (let i = 0; i < 16; i++) { g.beginPath(); g.moveTo(160 + i * 30, 300); g.lineTo(160 + i * 30, 180); g.stroke(); }
+  g.fillStyle = "#e8ecef";
+  g.font = "600 30px IBM Plex Mono, monospace"; g.fillText(label, 30, 50);
+  g.font = "20px IBM Plex Mono, monospace"; g.fillText(sub, 30, 80);
+  g.fillText("J_IDC  1=F1 2=S1 ... 33,34=GND", 30, 370);
+  g.strokeStyle = "#e8ecef"; g.lineWidth = 2; g.strokeRect(5, 5, 790, 390);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+function ribbonTexture() {
+  const c = document.createElement("canvas"); c.width = 340; c.height = 8;
+  const g = c.getContext("2d");
+  for (let i = 0; i < 34; i++) { g.fillStyle = i === 0 ? "#b53a3a" : (i % 2 ? "#9da3a9" : "#b9bec3"); g.fillRect(i * 10, 0, 10, 8); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapT = THREE.RepeatWrapping; return t;
+}
+
+// ---------- base plate ----------
+const base = box(300, 8, 160, M.aluDark, 0, -4, 0);
+base.receiveShadow = true;
+scene.add(tag(base, "fixture"));
+// rubber feet
+[[-140,-70],[140,-70],[-140,70],[140,70]].forEach(([x,z]) => scene.add(cyl(6, 4, M.black, x, -10, z)));
+
+// ---------- main board ----------
+const MB = new THREE.Group();
+MB.position.set(-75, 12.4, 0);
+scene.add(MB);
+const pcbBody = box(100, 1.6, 80, M.pcbEdge, 0, 0.8, 0);
+MB.add(tag(pcbBody, "main"));
+const silk = new THREE.Mesh(new THREE.PlaneGeometry(100, 80), new THREE.MeshStandardMaterial({ map: mainBoardTexture(), roughness: 0.55 }));
+silk.rotation.x = -Math.PI / 2; silk.position.y = 1.61;
+MB.add(tag(silk, "main"));
+// standoffs
+[[-46.5,-36.5],[46.5,-36.5],[-46.5,36.5],[46.5,36.5]].forEach(([x,z]) => {
+  MB.add(tag(cyl(2.8, 12.4, M.brass, x, -6.2, z, 6), "main"));
+  MB.add(tag(cyl(2.9, 1.2, M.steel, x, 2.2, z, 6), "main"));
+});
+const T = 1.6; // board top (local y)
+
+// power zone
+const pwr = new THREE.Group();
+pwr.add(box(14, 11, 9, M.black, -43, T + 5.5, 25));          // barrel jack
+pwr.add(cyl(2.2, 6, M.steel, -50.5, T + 6, 25).rotateZ(Math.PI / 2));
+const c1 = cyl(4, 12, M.cap, -40, T + 6, 9); pwr.add(c1);
+pwr.add(cyl(4.02, 1, M.steel, -40, T + 12, 9));
+pwr.add(box(3, 1.2, 3, M.ic, -34, T + 0.6, 17));             // LDO
+pwr.add(box(4.5, 2.5, 3.2, M.grey, -34, T + 1.25, 30));      // polyfuse
+pwr.add(box(4.5, 2.2, 3.6, M.ic, -27, T + 1.1, 30));         // TVS
+MB.add(tag(pwr, "power"));
+
+// wirewound resistors on raised legs
+const res = new THREE.Group();
+[[-15, 33], [7, 33]].forEach(([x, z]) => {
+  res.add(box(22, 9, 10, M.ceramic, x, T + 7.5, z));
+  res.add(box(0.8, 3, 0.8, M.steel, x - 13, T + 1.5, z));
+  res.add(box(0.8, 3, 0.8, M.steel, x + 13, T + 1.5, z));
+  res.add(box(27, 0.8, 0.8, M.steel, x, T + 3, z));
+});
+MB.add(tag(res, "res"));
+
+// ACS712 SOIC-8
+MB.add(tag(box(5, 1.6, 4, M.ic, 5, T + 0.8, 20), "acs"));
+// shift registers SOIC-16
+const sr = new THREE.Group();
+sr.add(box(4, 1.6, 10, M.ic, 7, T + 0.8, -10));
+sr.add(box(4, 1.6, 10, M.ic, 7, T + 0.8, 10));
+MB.add(tag(sr, "sr"));
+// 16 SOT-23 MOSFETs in a column
+const fets = new THREE.Group();
+for (let i = 0; i < 16; i++) fets.add(box(1.4, 1.1, 3, M.ic, 17, T + 0.55, -19 + i * 2.5));
+MB.add(tag(fets, "fets"));
+// muxes SOIC-24
+const mux = new THREE.Group();
+mux.add(box(7.5, 2.3, 15.4, M.ic, -24, T + 1.15, 6));
+mux.add(box(7.5, 2.3, 15.4, M.ic, -24, T + 1.15, 21).translateZ(0));
+MB.add(tag(mux, "mux"));
+MB.add(tag(box(3, 1.1, 3, M.ic, -9, T + 0.55, 8), "ina"));
+MB.add(tag(box(3, 1.1, 3, M.ic, -9, T + 0.55, 15), "adc"));
+// small passives scattered (decor)
+const smalls = new THREE.Group();
+const passive = new THREE.MeshStandardMaterial({ color: 0x8a6d4b, roughness: 0.6 });
+for (let i = 0; i < 26; i++) {
+  const x = -30 + (i % 13) * 3.3, z = 13 + Math.floor(i / 13) * 14;
+  smalls.add(box(1.6, 0.6, 0.8, passive, x, T + 0.3, z - 26));
+}
+MB.add(tag(smalls, "main"));
+// LED + JST + jumper
+MB.add(tag(box(2, 1, 1.25, M.led, -38, T + 0.5, -26), "main"));
+const jst = new THREE.Group(); jst.add(box(5, 6, 7.5, new THREE.MeshStandardMaterial({ color: 0xe9e2cf, roughness: 0.7 }), -46, T + 3, -26)); MB.add(tag(jst, "sw"));
+MB.add(tag(box(7.6, 8.5, 2.5, M.black, -17, T + 4.25, 26), "ina"));
+
+// IDC box headers J2 (outer) and J3 (inner), length along z
+function idcHeader(x, partName) {
+  const g = new THREE.Group();
+  g.add(box(8.9, 9, 50.8, M.black, x, T + 4.5, 0));
+  g.add(box(6.2, 6, 43, M.ic, x, T + 6.2, 0));            // cavity look
+  for (let r = 0; r < 2; r++) for (let i = 0; i < 17; i++) g.add(box(0.64, 6, 0.64, M.gold, x - 1.27 + r * 2.54, T + 6, -20.3 + i * 2.54));
+  g.add(box(9.2, 8, 46, M.grey, x, T + 13, 0));            // IDC cable socket
+  return tag(g, partName);
+}
+MB.add(idcHeader(43, "idc"));
+MB.add(idcHeader(29, "idc"));
+
+// ESP32 DevKitC on headers
+const esp = new THREE.Group();
+esp.position.set(-17, T, -24);
+esp.add(box(54.4, 8.5, 2.6, M.black, 0, 4.25, -11.4));
+esp.add(box(54.4, 8.5, 2.6, M.black, 0, 4.25, 11.4));
+esp.add(box(54.4, 1.6, 27.9, M.espPcb, 0, 9.3, 0));
+esp.add(box(18, 0.8, 25.5, new THREE.MeshStandardMaterial({ color: 0x1f2a22, roughness: 0.5 }), 17, 10.5, 0));
+esp.add(box(17.8, 3.1, 17, M.steel, 14, 11.6, 0));
+esp.add(box(7.5, 3, 5.6, M.steel, -26, 11.6, 0));          // USB
+esp.add(box(3.5, 1.6, 3.5, M.ic, -19, 10.9, -8));            // buttons
+esp.add(box(3.5, 1.6, 3.5, M.ic, -19, 10.9, 8));
+esp.add(box(5, 1.5, 5, M.ic, -8, 10.8, 0));                  // USB-UART
+MB.add(tag(esp, "esp32"));
+
+// ---------- fixture: rail, female mount, carriage ----------
+const FIX = new THREE.Group();
+scene.add(FIX);
+FIX.add(box(110, 8, 15, M.alu, 80, 4, 0));                   // rail
+FIX.add(box(110, 1, 6, M.steel, 80, 8.5, 0));
+// female mount bracket (fixed)
+FIX.add(box(14, 22, 74, M.alu, 120, 11, 0));
+tag(FIX, "fixture");
+
+const XF = 118;                // female board centre x
+const GAP = 32.92;             // board to board when mated
+const XM_MATED = XF - GAP, XM_OPEN = XF - GAP - 34;
+const BOARD_Y = 42;
+
+function jackBoard(kind) {
+  const g = new THREE.Group();
+  const isPlug = kind === "male";
+  const pcb = box(1.6, 40, 80, M.pcbEdge, 0, 0, 0);
+  g.add(tag(pcb, kind));
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(80, 40), new THREE.MeshStandardMaterial({ map: jackBoardTexture(isPlug ? "MALE  RP16-T" : "FEMALE  RS16P-T", "CR-TEST JACK v0.1  Kelvin F+S per pin"), roughness: 0.55 }));
+  lab.rotation.y = -Math.PI / 2; lab.position.x = -0.81;
+  g.add(tag(lab, kind));
+  // IDC header on outer face (-x), near top edge, length along z
+  const hdr = new THREE.Group();
+  hdr.add(box(9, 8.9, 50.8, M.black, -0.8 - 4.5, 12, 0));
+  hdr.add(box(8, 9.2, 46, M.grey, -0.8 - 9 - 4, 12, 0));
+  g.add(tag(hdr, "idc"));
+  // connector on inner face (+x)
+  const so = isPlug ? 7.1 : 7.9;
+  const conn = new THREE.Group();
+  [-26.985, 26.985].forEach(z => conn.add(cyl(2.6, so, M.brass, 0.8 + so / 2, 0, z, 6).rotateZ(Math.PI / 2)));
+  const plateX = 0.8 + so + 0.455;
+  conn.add(box(0.91, 22.35, 62.99, M.steel, plateX, 0, 0));
+  [-26.985, 26.985].forEach(z => conn.add(cyl(2.4, 1.6, M.steel, plateX + 1, 0, z, 6).rotateZ(Math.PI / 2)));
+  const below = so - 1;
+  conn.add(box(below, 17, 44, M.dap, 0.8 + 1 + below / 2, 0, 0));
+  if (isPlug) {
+    conn.add(box(6, 19.05, 45.47, M.dap, plateX + 0.455 + 3, 0, 0));
+    for (let r = 0; r < 2; r++) for (let i = 0; i < 8; i++) {
+      conn.add(box(4, 3.2, 2.2, M.dap, plateX + 0.455 + 6 + 2, (r ? -4.57 : 4.57), -16.45 + i * 4.7));   // barrier
+      conn.add(box(4.6, 1.0, 2.0, M.gold, plateX + 0.455 + 6 + 2.3, (r ? -4.57 : 4.57) + (r ? 1.9 : -1.9), -16.45 + i * 4.7));
+    }
+  } else {
+    conn.add(box(8.5, 19.3, 45.47, M.dap, plateX + 0.455 + 4.25, 0, 0));
+    for (let r = 0; r < 2; r++) for (let i = 0; i < 8; i++)
+      conn.add(box(0.4, 3.4, 2.6, M.black, plateX + 0.455 + 8.5 + 0.2, (r ? -4.57 : 4.57), -16.45 + i * 4.7));
+  }
+  // PC tails through the board
+  for (let r = 0; r < 2; r++) for (let i = 0; i < 8; i++)
+    conn.add(box(isPlug ? 3.2 : 4, 0.9, 0.9, M.gold, -0.8 - (isPlug ? 1.6 : 2), (r ? -4.57 : 4.57), -16.45 + i * 4.7));
+  g.add(tag(conn, isPlug ? "plug" : "socket"));
+  return g;
+}
+
+const female = jackBoard("female");
+female.rotation.y = Math.PI;               // inner face toward -x
+female.position.set(XF, BOARD_Y, 0);
+scene.add(female);
+
+const carriage = new THREE.Group();
+scene.add(carriage);
+const male = jackBoard("male");
+male.position.set(0, BOARD_Y, 0);
+carriage.add(male);
+const car = new THREE.Group();
+car.add(box(26, 12, 30, M.alu, -3, 14, 0));                 // carriage block
+car.add(box(10, 14, 74, M.alu, 0, 26 - 6, 0));               // board clamp
+car.add(cyl(2, 40, M.steel, -26, 14, 0).rotateZ(Math.PI / 2)); // handle rod
+const knob = new THREE.Mesh(new THREE.SphereGeometry(6, 24, 16), M.knob); knob.position.set(-47, 14, 0); car.add(knob);
+car.add(box(3, 6, 6, M.alu, 10, 11, 12));                    // switch striker
+carriage.add(tag(car, "fixture"));
+
+// mate-detect microswitch on the rail side
+const swg = new THREE.Group();
+swg.add(box(12.8, 6.5, 5.8, M.black, XM_MATED + 22, 11, 16));
+const lever = box(13, 0.4, 3, M.steel, XM_MATED + 16, 14.6, 16); lever.rotation.z = 0.18; swg.add(lever);
+swg.add(box(1, 4, 1, M.gold, XM_MATED + 18, 6, 16));
+swg.add(box(1, 4, 1, M.gold, XM_MATED + 24, 6, 16));
+scene.add(tag(swg, "sw"));
+
+// ---------- ribbons ----------
+const ribbonMat = new THREE.MeshStandardMaterial({ map: ribbonTexture(), roughness: 0.6, side: THREE.DoubleSide });
+function ribbonGeometry(points, width) {
+  const curve = new THREE.CatmullRomCurve3(points, false, "centripetal");
+  const N = 80, pos = [], uv = [], idx = [];
+  const W = new THREE.Vector3(0, 0, 1);
+  for (let i = 0; i <= N; i++) {
+    const t = i / N, p = curve.getPoint(t);
+    const a = p.clone().addScaledVector(W, -width / 2), b = p.clone().addScaledVector(W, width / 2);
+    pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+    uv.push(0, t * 6, 1, t * 6);
+    if (i < N) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+const ribM = new THREE.Mesh(new THREE.BufferGeometry(), ribbonMat);
+const ribF = new THREE.Mesh(new THREE.BufferGeometry(), ribbonMat);
+scene.add(tag(ribM, "ribbon")); scene.add(tag(ribF, "ribbon"));
+const V = (x, y, z = 0) => new THREE.Vector3(x, y, z);
+const J3x = -75 + 29, J2x = -75 + 43, Jtop = 12.4 + T + 17;
+function updateRibbons(xm) {
+  ribM.geometry.dispose();
+  ribM.geometry = ribbonGeometry([V(xm - 14, BOARD_Y + 12), V(xm - 26, BOARD_Y + 20), V(xm - 40, BOARD_Y + 30), V(-10, 70), V(J3x, 52), V(J3x, Jtop + 6), V(J3x, Jtop)], 43);
+  ribF.geometry.dispose();
+  ribF.geometry = ribbonGeometry([V(XF + 14, BOARD_Y + 12), V(XF + 30, BOARD_Y + 30), V(XF + 10, 104), V(50, 112), V(-8, 98), V(J2x, 64), V(J2x, Jtop + 6), V(J2x, Jtop)], 43);
+}
+
+// ---------- state / animation ----------
+let xm = XM_MATED, target = XM_MATED, cycle = 0, busy = false, auto = false;
+carriage.position.x = xm; updateRibbons(xm);
+const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function setCarriage(x) { xm = x; carriage.position.x = x; updateRibbons(x); lever.rotation.z = (x > XM_MATED - 1) ? 0.02 : 0.18; }
+function animateTo(x, ms) {
+  return new Promise(res => {
+    if (reduce) { setCarriage(x); return res(); }
+    const x0 = xm, t0 = performance.now();
+    function step(now) {
+      const k = Math.min(1, (now - t0) / ms), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      setCarriage(x0 + (x - x0) * e);
+      k < 1 ? requestAnimationFrame(step) : res();
+    }
+    requestAnimationFrame(step);
+  });
+}
+async function plugCycle() {
+  if (busy) return; busy = true;
+  await animateTo(XM_OPEN, 700);
+  await new Promise(r => setTimeout(r, reduce ? 0 : 250));
+  await animateTo(XM_MATED, 700);
+  cycle++; scan(); busy = false;
+}
+document.getElementById("cycle").addEventListener("click", plugCycle);
+const autoBtn = document.getElementById("auto");
+let autoTimer = null;
+autoBtn.addEventListener("click", () => {
+  auto = !auto; autoBtn.setAttribute("aria-pressed", String(auto));
+  autoBtn.textContent = auto ? "Stop auto cycle" : "Auto cycle";
+  if (auto) { const loop = async () => { if (!auto) return; await plugCycle(); autoTimer = setTimeout(loop, 400); }; loop(); }
+  else clearTimeout(autoTimer);
+});
+
+// ---------- simulated readout ----------
+const barsEl = document.getElementById("bars"), pinsEl = document.getElementById("pins");
+const SCALE = 14; // mΩ shown at full height
+document.getElementById("limit").style.bottom = (10 / SCALE * 100) + "%";
+const bars = [];
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const baseR = Array.from({ length: 16 }, () => 2.2 + rnd() * 1.3);
+const wear = Array.from({ length: 16 }, (_, i) => (i === 11 ? 0.012 : 0.002 + rnd() * 0.004));
+for (let i = 0; i < 16; i++) {
+  const b = document.createElement("div"); b.className = "bar"; barsEl.appendChild(b); bars.push(b);
+  const p = document.createElement("div"); p.textContent = i + 1; pinsEl.appendChild(p);
+}
+function scan() {
+  document.getElementById("cyc").textContent = "cycle " + cycle;
+  for (let i = 0; i < 16; i++) {
+    const r = baseR[i] + wear[i] * cycle * 6 + (rnd() - 0.5) * 0.25;
+    bars[i].style.height = Math.min(100, r / SCALE * 100) + "%";
+    bars[i].classList.toggle("bad", r > 10);
+    bars[i].title = `Pin ${i + 1}: ${r.toFixed(2)} mΩ`;
+  }
+}
+scan();
+
+// ---------- picking / info ----------
+const info = document.getElementById("info");
+const listEl = document.getElementById("partlist");
+LIST.forEach(k => {
+  const li = document.createElement("li");
+  const b = document.createElement("button"); b.type = "button"; b.dataset.part = k;
+  b.innerHTML = `${PARTS[k].name}<span>${PARTS[k].ref}</span>`;
+  b.addEventListener("click", () => select(k));
+  b.addEventListener("mouseenter", () => highlight(k));
+  b.addEventListener("mouseleave", () => highlight(selected));
+  li.appendChild(b); listEl.appendChild(li);
+});
+let selected = null, lit = null;
+function highlight(k) {
+  if (lit) partMeshes[lit]?.forEach(m => { m.material = m.userData.baseMat; });
+  lit = k;
+  if (!k) return;
+  partMeshes[k]?.forEach(m => {
+    m.userData.baseMat ||= m.material;
+    const h = m.userData.baseMat.clone();
+    h.emissive = new THREE.Color(0xd9a441); h.emissiveIntensity = 0.45;
+    m.material = h;
+  });
+}
+function select(k) {
+  selected = k;
+  const p = PARTS[k];
+  info.innerHTML = `<span class="ref">${p.ref}</span><h3>${p.name}</h3><p>${p.text}</p>`;
+  listEl.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.part === k));
+  highlight(k);
+}
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+const hoverEl = document.getElementById("hover");
+let down = null;
+function pick(ev) {
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(pickables, false)[0];
+  return hit ? hit.object.userData.part : null;
+}
+renderer.domElement.addEventListener("pointerdown", e => { down = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener("pointerup", e => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
+  const k = pick(e); if (k) select(k);
+});
+renderer.domElement.addEventListener("pointermove", e => {
+  if (e.pointerType !== "mouse") return;
+  const k = pick(e);
+  if (k) {
+    const r = stage.getBoundingClientRect();
+    hoverEl.style.display = "block"; hoverEl.textContent = PARTS[k].name;
+    hoverEl.style.left = (e.clientX - r.left + 14) + "px"; hoverEl.style.top = (e.clientY - r.top + 10) + "px";
+    renderer.domElement.style.cursor = "pointer";
+  } else { hoverEl.style.display = "none"; renderer.domElement.style.cursor = ""; }
+});
+
+// ---------- views ----------
+const VIEWS = {
+  overview: { pos: V(-170, 230, 300), tgt: V(10, 25, 0) },
+  main:     { pos: V(-75, 175, 125), tgt: V(-75, 12, 0) },
+  jack:     { pos: V(60, 95, 120), tgt: V(100, 40, 0) },
+};
+function goView(name, instant) {
+  const v = VIEWS[name];
+  if (instant || reduce) { camera.position.copy(v.pos); controls.target.copy(v.tgt); return; }
+  const p0 = camera.position.clone(), t0v = controls.target.clone(), t0 = performance.now();
+  (function step(now) {
+    const k = Math.min(1, (now - t0) / 800), e = 1 - Math.pow(1 - k, 3);
+    camera.position.lerpVectors(p0, v.pos, e); controls.target.lerpVectors(t0v, v.tgt, e);
+    if (k < 1) requestAnimationFrame(step);
+  })(t0);
+}
+document.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => goView(b.dataset.view)));
+goView("overview", true);
+
+// ---------- resize / loop ----------
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h;
+  const narrow = w < 560;
+  VIEWS.overview.pos.set(narrow ? -230 : -170, narrow ? 300 : 230, narrow ? 420 : 300);
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+resize(); goView("overview", true);
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>
