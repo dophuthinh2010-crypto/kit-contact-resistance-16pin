@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RP16 Contact Life Simulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Layout: instrument bench. X-ray 3D view of the mated connector on the left, the test rig's readout panel on the right (below on phones). */
+  --bench: #11161d;
+  --panel: #151c24;
+  --raise: #1c2530;
+  --line: #2a3542;
+  --ink: #e6ebf0;
+  --muted: #8d9aa8;
+  --accent: #2a9bb3;
+  --ctx: #4a5666;
+  --ok: #4fb286;
+  --warn: #e0a03a;
+  --bad: #e2574c;
+  --display: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bench); color: var(--ink);
+  font: 14px/1.45 var(--display);
+  display: grid; grid-template-columns: minmax(0, 1fr) 420px; overflow: hidden;
+}
+#stage { position: relative; min-height: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#hud { position: absolute; left: 14px; right: 14px; top: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; pointer-events: none; }
+#hud > * { pointer-events: auto; }
+.btn {
+  font: 500 13px var(--display); color: var(--ink);
+  background: rgba(21, 28, 36, 0.9); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 12px; cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); }
+.btn:focus-visible, select:focus-visible, input:focus-visible, .pinrow:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #06161a; }
+.btn[aria-pressed="true"] { border-color: var(--accent); color: #7fd3e3; }
+#status {
+  position: absolute; left: 14px; bottom: 12px; font: 12px var(--mono); color: var(--ink);
+  background: rgba(17, 22, 29, 0.85); border: 1px solid var(--line); padding: 6px 10px; border-radius: 6px;
+}
+#status b { color: #7fd3e3; font-weight: 500; }
+aside { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 20px 20px 28px; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-size: 21px; font-weight: 600; margin: 0; text-wrap: balance; }
+h2 { font-size: 11.5px; font-weight: 600; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.sub { color: var(--muted); margin: 6px 0 0; font-size: 13px; }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tile { background: var(--raise); border-radius: 6px; padding: 8px 10px; }
+.tile b { display: block; font: 500 17px var(--mono); font-variant-numeric: tabular-nums; }
+.tile span { font-size: 11px; color: var(--muted); }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+select, input[type="range"] { width: 100%; }
+select { font: 13px var(--display); color: var(--ink); background: var(--raise); border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; }
+input[type="range"] { accent-color: var(--accent); }
+.val { font: 12px var(--mono); color: var(--ink); }
+.chain { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.chain td { padding: 4px 0; border-bottom: 1px solid var(--line); }
+.chain td:nth-child(2) { color: var(--muted); font-size: 11.5px; }
+.chain td:last-child { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.chain tr.result td { border-bottom: 0; font-weight: 600; }
+.chain tr.result td:last-child { color: #7fd3e3; }
+#chartwrap { position: relative; }
+#chart { width: 100%; height: 220px; display: block; }
+#tt {
+  position: absolute; pointer-events: none; display: none; background: var(--raise); border: 1px solid var(--line);
+  border-radius: 5px; padding: 6px 8px; font: 11.5px var(--mono); white-space: nowrap; color: var(--ink);
+}
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 16px; height: 2px; vertical-align: middle; margin-right: 6px; }
+.pins { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+.pinrow {
+  display: grid; grid-template-columns: 28px 1fr auto; gap: 6px; align-items: center; text-align: left;
+  background: var(--raise); border: 1px solid transparent; border-radius: 5px; padding: 5px 8px; color: var(--ink);
+  font: 12px var(--mono); cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.pinrow.on { border-color: var(--accent); }
+.pinrow .n { color: var(--muted); }
+.st { font: 600 10.5px var(--display); padding: 1px 6px; border-radius: 9px; }
+.st.ok { color: var(--ok); background: rgba(79,178,134,.12); }
+.st.warn { color: var(--warn); background: rgba(224,160,58,.12); }
+.st.bad { color: var(--bad); background: rgba(226,87,76,.14); }
+.note { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+@media (max-width: 860px) {
+  body { grid-template-columns: 1fr; grid-template-rows: 52% 48%; }
+  aside { border-left: 0; border-top: 1px solid var(--line); padding: 14px; }
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .btn { padding: 6px 9px; font-size: 12px; }
+}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage">
+  <div id="hud">
+    <button class="btn primary" id="run" type="button">Run</button>
+    <button class="btn" id="step" type="button">One cycle</button>
+    <button class="btn" id="reset" type="button">Reset</button>
+    <button class="btn" id="xray" type="button" aria-pressed="true">X-ray socket</button>
+  </div>
+  <div id="status">cycle <b id="s-cyc">0</b> · <span id="s-phase">mated, idle</span></div>
+</div>
+
+<aside>
+  <header>
+    <h1>RP16 contact life simulation</h1>
+    <p class="sub">Runs the test kit cycle by cycle: unplug, plug, then scan all 16 contacts with the real measurement chain. Contact wear follows an assumed model, so the life numbers show how the test behaves, not how your connector will.</p>
+  </header>
+
+  <div class="tiles">
+    <div class="tile"><b id="t-cyc">0</b><span>cycles run</span></div>
+    <div class="tile"><b id="t-fail">0 / 16</b><span>pins failed</span></div>
+    <div class="tile"><b id="t-first">–</b><span>first failure</span></div>
+    <div class="tile"><b id="t-worst">–</b><span>worst pin now</span></div>
+  </div>
+
+  <section>
+    <h2>Test settings</h2>
+    <div class="controls">
+      <label for="speed">Speed
+        <select id="speed">
+          <option value="real">Real time (≈4 s / cycle)</option>
+          <option value="fast" selected>Fast (×15)</option>
+          <option value="max">Maximum</option>
+        </select>
+      </label>
+      <label for="current">Test current
+        <select id="current">
+          <option value="hi" selected>0.62 A (as designed)</option>
+          <option value="lo">0.10 A dry circuit</option>
+        </select>
+      </label>
+      <label for="gain">INA333 gain (JP1)
+        <select id="gain">
+          <option value="11">G = 11</option>
+          <option value="101" selected>G = 101</option>
+          <option value="1001">G = 1001</option>
+        </select>
+      </label>
+      <label for="limit">Fail limit <span class="val" id="limit-v">10.0 mΩ</span>
+        <input id="limit" type="range" min="5" max="20" step="0.5" value="10">
+      </label>
+      <label for="wear">Wear rate <span class="val" id="wear-v">1.0×</span>
+        <input id="wear" type="range" min="0.3" max="3" step="0.1" value="1">
+      </label>
+      <label for="maxc">Stop after <span class="val" id="maxc-v">1500 cycles</span>
+        <input id="maxc" type="range" min="250" max="3000" step="250" value="1500">
+      </label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Measurement chain · pin <span id="c-pin">1</span></h2>
+    <table class="chain">
+      <tr><td>True contact resistance</td><td>wear model</td><td id="c-rt">–</td></tr>
+      <tr><td>Test current</td><td>5 V / (R_HI + R_LO + path)</td><td id="c-it">–</td></tr>
+      <tr><td>ACS712 output</td><td>2.5 V + 185 mV/A</td><td id="c-va">–</td></tr>
+      <tr><td>Measured current</td><td>(V − V₀) / 0.185</td><td id="c-im">–</td></tr>
+      <tr><td>Contact voltage</td><td>I × R</td><td id="c-vc">–</td></tr>
+      <tr><td>INA333 output</td><td>G × V, 0.05–3.25 V</td><td id="c-vi">–</td></tr>
+      <tr><td>ADS1115 code</td><td>125 µV / LSB</td><td id="c-code">–</td></tr>
+      <tr class="result"><td>Measured R</td><td id="c-err">error</td><td id="c-rm">–</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Resistance vs cycles</h2>
+    <div id="chartwrap">
+      <canvas id="chart" aria-label="Measured contact resistance of all 16 pins against cycle count, with the fail limit"></canvas>
+      <div id="tt"></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--accent)"></i>Selected pin</span>
+      <span><i style="background:var(--ctx)"></i>Other 15 pins</span>
+      <span><i style="background:var(--bad)"></i>Fail limit</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Pins · tap to select</h2>
+    <div class="pins" id="pins"></div>
+    <p class="note">A pin fails after 3 scans in a row above the limit, so a single fretting spike doesn't count.</p>
+  </section>
+
+  <section>
+    <h2>Model assumptions</h2>
+    <p class="note">Start resistance 2.2–3.5 mΩ (datasheet: 5 mΩ max new). Wear R = R₀ + A·(N/500)^1.6 with A ≈ 3 mΩ per pin (one weaker pin), plus random fretting spikes that grow more likely with cycles. Noise: ACS712 ≈ 4 mV rms (averaged), INA333 offset and noise after calibration, ADS1115 quantisation. Replace the wear model with your logged data once the kit runs.</p>
+  </section>
+</aside>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+const $ = id => document.getElementById(id);
+const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// ================= simulation model =================
+let seed = 20261118;
+const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const gauss = () => { let u = 0, v = 0; while (!u) u = rnd(); while (!v) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+const PINS = 16, MAXHIST = 3000;
+let R0, A, hist, failAt, overRun, cycle;
+function initModel() {
+  seed = 20261118;
+  R0 = Array.from({ length: PINS }, () => 2.2 + rnd() * 1.3);
+  A = Array.from({ length: PINS }, (_, i) => (i === 10 ? 6.2 : 3.0 * Math.exp(gauss() * 0.22)));
+  hist = Array.from({ length: PINS }, () => new Float32Array(MAXHIST + 1).fill(NaN));
+  failAt = new Array(PINS).fill(null);
+  overRun = new Array(PINS).fill(0);
+  cycle = 0;
+}
+function trueR(p, n) {        // mΩ
+  const wear = +$("wear").value;
+  let r = R0[p] + wear * A[p] * Math.pow(n / 500, 1.6);
+  const pSpike = 0.003 + 0.03 * Math.pow(n / 1000, 2) * wear;
+  if (rnd() < pSpike) r += 0.5 + rnd() * 3;
+  return r;
+}
+function config() {
+  const lo = $("current").value === "lo";
+  return { rhi: lo ? 33 : 5.6, rlo: lo ? 15 : 2.2, G: +$("gain").value };
+}
+const LSB = 125e-6;
+const q = v => Math.round(v / LSB) * LSB;
+function measure(p, n) {
+  const { rhi, rlo, G } = config();
+  const rt = trueR(p, n);
+  const Ri = rt / 1000;
+  const It = 5 / (rhi + rlo + 0.03 + 0.15 + Ri);
+  const v0 = q(2.5 + gauss() * 0.004 / 4);              // zero read, 16 samples
+  const va = q(2.5 + 0.185 * It + gauss() * 0.004 / Math.sqrt(8));
+  const Im = (va - v0) / 0.185;
+  const vc = It * Ri;
+  let vi = G * (vc + gauss() * 1.5e-6 + 0.8e-6) + gauss() * 0.0003;
+  const clipHi = vi >= 3.25, clipLo = vi <= 0.05;
+  vi = q(Math.min(3.25, Math.max(0.05, vi)));
+  const rm = (vi / G) / Im * 1000;
+  return { rt, It, va, Im, vc, vi, code: Math.round(vi / LSB), rm, clipHi, clipLo, G };
+}
+
+// ================= 3D scene =================
+const stage = $("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x11161d);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(32, 1, 1, 2000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.minDistance = 40; controls.maxDistance = 500;
+controls.maxPolarAngle = Math.PI * 0.49;
+camera.position.set(30, 120, 170); controls.target.set(100, 42, 0);
+scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x1a1f26, 0.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+sun.position.set(-60, 200, 140); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -120, right: 120, top: 100, bottom: -100, near: 20, far: 500 });
+scene.add(sun);
+
+const M = {
+  alu: new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 0.7, roughness: 0.45 }),
+  aluDark: new THREE.MeshStandardMaterial({ color: 0x5c6670, metalness: 0.6, roughness: 0.5 }),
+  steel: new THREE.MeshStandardMaterial({ color: 0xc9ced3, metalness: 0.9, roughness: 0.25 }),
+  gold: new THREE.MeshStandardMaterial({ color: 0xe0b14a, metalness: 1, roughness: 0.25 }),
+  brass: new THREE.MeshStandardMaterial({ color: 0xb8913f, metalness: 0.9, roughness: 0.35 }),
+  dap: new THREE.MeshStandardMaterial({ color: 0xa8262c, roughness: 0.55 }),
+  dapX: new THREE.MeshStandardMaterial({ color: 0xa8262c, roughness: 0.55, transparent: true, opacity: 0.28, depthWrite: false }),
+  black: new THREE.MeshStandardMaterial({ color: 0x1b1d20, roughness: 0.6 }),
+  grey: new THREE.MeshStandardMaterial({ color: 0x6d737a, roughness: 0.7 }),
+  pcb: new THREE.MeshStandardMaterial({ color: 0x0f5132, roughness: 0.6 }),
+  knob: new THREE.MeshStandardMaterial({ color: 0xc8343b, roughness: 0.4 }),
+};
+const box = (w, h, d, m, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; return o; };
+const cyl = (r, h, m, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 20), m); o.position.set(x, y, z); o.castShadow = true; return o; };
+
+scene.add(box(170, 6, 110, M.aluDark, 85, -3, 0));
+scene.add(box(110, 8, 15, M.alu, 80, 4, 0));
+scene.add(box(14, 22, 74, M.alu, 120, 11, 0));
+
+const XF = 118, GAP = 32.92, XM = XF - GAP, XOPEN = XM - 34, BY = 42;
+const pinPos = p => ({ y: (p < 8 ? 4.57 : -4.57), z: -16.45 + (p % 8) * 4.7 });
+const plugContacts = [], socketContacts = [];
+let socketBodies = [];
+
+function jackBoard(isPlug) {
+  const g = new THREE.Group();
+  g.add(box(1.6, 40, 80, M.pcb));
+  g.add(box(9, 8.9, 50.8, M.black, -5.3, 12, 0));
+  g.add(box(8, 9.2, 46, M.grey, -13.8, 12, 0));
+  const so = isPlug ? 7.1 : 7.9, plateX = 0.8 + so + 0.455;
+  [-26.985, 26.985].forEach(z => g.add(cyl(2.6, so, M.brass, 0.8 + so / 2, 0, z).rotateZ(Math.PI / 2)));
+  g.add(box(0.91, 22.35, 62.99, M.steel, plateX, 0, 0));
+  const below = so - 1;
+  const lower = box(below, 17, 44, isPlug ? M.dap : M.dapX, 1.8 + below / 2, 0, 0);
+  g.add(lower);
+  if (isPlug) {
+    g.add(box(6, 19.05, 45.47, M.dap, plateX + 3.455, 0, 0));
+    for (let p = 0; p < PINS; p++) {
+      const { y, z } = pinPos(p);
+      g.add(box(4, 3.2, 2.2, M.dap, plateX + 8.455, y, z));
+      const m = M.gold.clone();
+      const c = box(5.6, 1.0, 2.0, m, plateX + 8.9, y + (y > 0 ? -1.9 : 1.9), z);
+      g.add(c); plugContacts.push(c);
+    }
+  } else {
+    lower.castShadow = false;
+    const body = box(8.5, 19.3, 45.47, M.dapX, plateX + 4.705, 0, 0);
+    body.castShadow = false;
+    g.add(body); socketBodies = [lower, body];
+    for (let p = 0; p < PINS; p++) {
+      const { y, z } = pinPos(p);
+      const m = M.gold.clone();
+      const c = box(14, 1.0, 2.0, m, plateX - 2, y + (y > 0 ? -0.9 : 0.9), -z);   // socket spring contact; -z because this board is turned 180°, so pin n lines up with plug pin n
+      g.add(c); socketContacts.push(c);
+    }
+  }
+  for (let p = 0; p < PINS; p++) { const { y, z } = pinPos(p); g.add(box(isPlug ? 3.2 : 4, 0.9, 0.9, M.gold, -0.8 - (isPlug ? 1.6 : 2), y, isPlug ? z : -z)); }
+  return g;
+}
+const female = jackBoard(false);
+female.rotation.y = Math.PI; female.position.set(XF, BY, 0); scene.add(female);
+const carriage = new THREE.Group(); scene.add(carriage);
+const male = jackBoard(true); male.position.y = BY; carriage.add(male);
+carriage.add(box(26, 12, 30, M.alu, -3, 14, 0));
+carriage.add(box(10, 14, 74, M.alu, 0, 20, 0));
+carriage.add(cyl(2, 40, M.steel, -26, 14, 0).rotateZ(Math.PI / 2));
+const knob = new THREE.Mesh(new THREE.SphereGeometry(6, 24, 16), M.knob); knob.position.set(-47, 14, 0); carriage.add(knob);
+scene.add(box(12.8, 6.5, 5.8, M.black, XM + 22, 11, 16));
+carriage.position.x = XM;
+
+// current particles + sense lines
+const PCOUNT = 36;
+const pGeo = new THREE.SphereGeometry(0.75, 10, 8);
+const pMat = new THREE.MeshBasicMaterial({ color: 0x5fd4ea });
+const particles = new THREE.InstancedMesh(pGeo, pMat, PCOUNT);
+particles.visible = false; scene.add(particles);
+const senseMat = new THREE.LineDashedMaterial({ color: 0xb59cff, dashSize: 1.5, gapSize: 1 });
+const sense = new THREE.Group(); scene.add(sense);
+let pathCurve = null;
+function setPath(p) {
+  const { y, z } = pinPos(p);
+  const xm = carriage.position.x;
+  pathCurve = new THREE.CurvePath();
+  const pts = [
+    new THREE.Vector3(XF + 10, BY + 12, z * 0.6), new THREE.Vector3(XF + 1, BY + y, z),
+    new THREE.Vector3(xm + 14, BY + y, z), new THREE.Vector3(xm - 1, BY + y, z), new THREE.Vector3(xm - 10, BY + 12, z * 0.6)
+  ];
+  for (let i = 0; i < pts.length - 1; i++) pathCurve.add(new THREE.LineCurve3(pts[i], pts[i + 1]));
+  sense.clear();
+  [[new THREE.Vector3(XF + 0.9, BY + y + 0.8, z), new THREE.Vector3(XF + 0.9, BY + 12, z * 0.6 + 1.5)],
+   [new THREE.Vector3(xm - 0.9, BY + y + 0.8, z), new THREE.Vector3(xm - 0.9, BY + 12, z * 0.6 + 1.5)]].forEach(([a, b]) => {
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), senseMat); l.computeLineDistances(); sense.add(l);
+  });
+}
+// current enters on the female side (F_BUS) and leaves through the male side to the pin's MOSFET
+const dummy = new THREE.Object3D();
+function drawParticles(t) {
+  if (!pathCurve || !particles.visible) return;
+  for (let i = 0; i < PCOUNT; i++) {
+    const u = ((i / PCOUNT) + t * 0.9) % 1;
+    dummy.position.copy(pathCurve.getPointAt(u));
+    dummy.updateMatrix(); particles.setMatrixAt(i, dummy.matrix);
+  }
+  particles.instanceMatrix.needsUpdate = true;
+}
+
+$("xray").addEventListener("click", e => {
+  const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
+  e.currentTarget.setAttribute("aria-pressed", String(on));
+  socketBodies.forEach(b => b.material = on ? M.dapX : M.dap);
+});
+
+const COL = { ok: new THREE.Color(0x000000), warn: new THREE.Color(0xe0a03a), bad: new THREE.Color(0xe2574c), sel: new THREE.Color(0x2a9bb3) };
+function paintContacts(active) {
+  const lim = +$("limit").value;
+  for (let p = 0; p < PINS; p++) {
+    const r = lastR[p];
+    const st = failAt[p] != null || r > lim ? "bad" : r > lim * 0.75 ? "warn" : "ok";
+    [plugContacts[p], socketContacts[p]].forEach(c => {
+      c.material.emissive.copy(p === active ? COL.sel : COL[st]);
+      c.material.emissiveIntensity = p === active ? 1.4 : st === "ok" ? 0 : 0.9;
+    });
+  }
+}
+
+// ================= UI: pins, chain, chart =================
+let selected = 0, lastR = new Array(PINS).fill(NaN), lastM = null;
+const pinsEl = $("pins");
+const pinBtns = [];
+for (let p = 0; p < PINS; p++) {
+  const b = document.createElement("button"); b.type = "button"; b.className = "pinrow";
+  b.innerHTML = `<span class="n">${p + 1}</span><span class="r">–</span><span class="st ok">OK</span>`;
+  b.addEventListener("click", () => { selected = p; if (!running) { lastM = measure(p, cycle); setPath(p); renderChain(); } refreshPins(); drawChart(); paintContacts(-1); });
+  pinsEl.appendChild(b); pinBtns.push(b);
+}
+const fmt = (v, d = 2) => Number.isFinite(v) ? v.toFixed(d) : "–";
+function refreshPins() {
+  const lim = +$("limit").value;
+  let failed = 0, first = null, worst = -1;
+  for (let p = 0; p < PINS; p++) {
+    const r = lastR[p];
+    const b = pinBtns[p];
+    b.classList.toggle("on", p === selected);
+    b.querySelector(".r").textContent = Number.isFinite(r) ? r.toFixed(2) + " mΩ" : "–";
+    const st = b.querySelector(".st");
+    if (failAt[p] != null) { st.className = "st bad"; st.textContent = "FAIL @" + failAt[p]; failed++; if (!first || failAt[p] < first.n) first = { n: failAt[p], p }; }
+    else if (r > lim * 0.75) { st.className = "st warn"; st.textContent = "WEAR"; }
+    else { st.className = "st ok"; st.textContent = "OK"; }
+    if (Number.isFinite(r) && (worst < 0 || r > lastR[worst])) worst = p;
+  }
+  $("t-cyc").textContent = cycle; $("s-cyc").textContent = cycle;
+  $("t-fail").textContent = failed + " / 16";
+  $("t-first").textContent = first ? `${first.n} · p${first.p + 1}` : "–";
+  $("t-worst").textContent = worst >= 0 ? `p${worst + 1} ${lastR[worst].toFixed(1)}` : "–";
+}
+function renderChain() {
+  const m = lastM; if (!m) return;
+  $("c-pin").textContent = selected + 1;
+  $("c-rt").textContent = fmt(m.rt, 3) + " mΩ";
+  $("c-it").textContent = fmt(m.It, 4) + " A";
+  $("c-va").textContent = fmt(m.va, 4) + " V";
+  $("c-im").textContent = fmt(m.Im, 4) + " A";
+  $("c-vc").textContent = m.vc < 1e-3 ? fmt(m.vc * 1e6, 1) + " µV" : fmt(m.vc * 1e3, 3) + " mV";
+  $("c-vi").textContent = fmt(m.vi, 4) + " V" + (m.clipHi ? " ⚠ over" : m.clipLo ? " ⚠ under" : "");
+  $("c-code").textContent = m.code;
+  $("c-rm").textContent = (m.clipHi ? "> " : m.clipLo ? "< " : "") + fmt(m.rm, 3) + " mΩ";
+  const err = (m.rm - m.rt) / m.rt * 100;
+  $("c-err").textContent = m.clipHi ? "over range: lower the gain" : m.clipLo ? "under range: raise the gain" : `error ${err >= 0 ? "+" : ""}${err.toFixed(1)} %`;
+}
+
+// chart
+const cv = $("chart"), cx = cv.getContext("2d");
+const PAD = { l: 34, r: 10, t: 10, b: 24 };
+let hoverN = null;
+function chartGeom() {
+  const dpr = Math.min(window.devicePixelRatio, 2), w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const maxN = +$("maxc").value, lim = +$("limit").value;
+  const ymax = Math.max(15, Math.ceil(lim * 1.5 / 5) * 5);
+  return { dpr, w, h, maxN, ymax, X: n => PAD.l + n / maxN * (w - PAD.l - PAD.r), Y: r => h - PAD.b - Math.min(r, ymax) / ymax * (h - PAD.t - PAD.b) };
+}
+function drawChart() {
+  const g = chartGeom(), { w, h, X, Y, maxN, ymax } = g;
+  cx.setTransform(g.dpr, 0, 0, g.dpr, 0, 0);
+  cx.clearRect(0, 0, w, h);
+  cx.font = "10.5px IBM Plex Mono, monospace"; cx.fillStyle = "#8d9aa8"; cx.strokeStyle = "#232c37"; cx.lineWidth = 1;
+  for (let r = 0; r <= ymax; r += 5) { cx.beginPath(); cx.moveTo(PAD.l, Y(r) + 0.5); cx.lineTo(w - PAD.r, Y(r) + 0.5); cx.stroke(); cx.textAlign = "right"; cx.fillText(r, PAD.l - 6, Y(r) + 3.5); }
+  const step = maxN <= 1000 ? 250 : maxN <= 2000 ? 500 : 1000;
+  cx.textAlign = "center";
+  for (let n = 0; n <= maxN; n += step) cx.fillText(n, X(n), h - 8);
+  cx.textAlign = "left"; cx.fillText("mΩ", 2, PAD.t + 4);
+  const last = Math.min(cycle, maxN);
+  const line = (p, color, width) => {
+    cx.strokeStyle = color; cx.lineWidth = width; cx.beginPath();
+    let started = false; const H = hist[p];
+    const stride = Math.max(1, Math.floor(last / 600));
+    for (let n = 1; n <= last; n += stride) { const v = H[n]; if (!Number.isFinite(v)) continue; const x = X(n), y = Y(v); started ? cx.lineTo(x, y) : (cx.moveTo(x, y), started = true); }
+    cx.stroke();
+  };
+  for (let p = 0; p < PINS; p++) if (p !== selected) line(p, "#4a5666", 1);
+  // limit
+  const lim = +$("limit").value;
+  cx.setLineDash([5, 4]); cx.strokeStyle = "#e2574c"; cx.lineWidth = 1.5;
+  cx.beginPath(); cx.moveTo(PAD.l, Y(lim)); cx.lineTo(w - PAD.r, Y(lim)); cx.stroke(); cx.setLineDash([]);
+  cx.fillStyle = "#e2574c"; cx.textAlign = "right"; cx.fillText(`limit ${lim} mΩ`, w - PAD.r - 2, Y(lim) - 5);
+  line(selected, "#2a9bb3", 2);
+  if (last > 0 && Number.isFinite(hist[selected][last])) {
+    cx.fillStyle = "#2a9bb3"; cx.strokeStyle = "#151c24"; cx.lineWidth = 2;
+    cx.beginPath(); cx.arc(X(last), Y(hist[selected][last]), 4, 0, Math.PI * 2); cx.fill(); cx.stroke();
+  }
+  if (hoverN != null && hoverN <= last) {
+    cx.strokeStyle = "#8d9aa8"; cx.lineWidth = 1; cx.beginPath(); cx.moveTo(X(hoverN) + 0.5, PAD.t); cx.lineTo(X(hoverN) + 0.5, h - PAD.b); cx.stroke();
+  }
+}
+const tt = $("tt");
+cv.addEventListener("pointermove", e => {
+  const g = chartGeom(), r = cv.getBoundingClientRect();
+  const n = Math.round((e.clientX - r.left - PAD.l) / (g.w - PAD.l - PAD.r) * g.maxN);
+  const last = Math.min(cycle, g.maxN);
+  if (n < 1 || n > last) { hoverN = null; tt.style.display = "none"; drawChart(); return; }
+  hoverN = n;
+  let worst = 0; for (let p = 1; p < PINS; p++) if (hist[p][n] > hist[worst][n]) worst = p;
+  tt.innerHTML = `cycle ${n}<br>pin ${selected + 1}: ${fmt(hist[selected][n])} mΩ<br>worst pin ${worst + 1}: ${fmt(hist[worst][n])} mΩ`;
+  tt.style.display = "block";
+  const x = e.clientX - r.left;
+  tt.style.left = Math.min(x + 12, r.width - 150) + "px"; tt.style.top = "8px";
+  drawChart();
+});
+cv.addEventListener("pointerleave", () => { hoverN = null; tt.style.display = "none"; drawChart(); });
+
+// ================= run loop =================
+let running = false, phase = "idle", phaseT = 0, scanPin = 0, lastFrame = performance.now(), chartDirty = true;
+const TIMING = { real: { move: 500, settle: 200, pin: 180 }, fast: { move: 90, settle: 30, pin: 18 } };
+function setPhase(txt) { $("s-phase").textContent = txt; }
+function recordScan(p, m) {
+  lastR[p] = m.rm;
+  if (cycle <= MAXHIST) hist[p][cycle] = m.rm;
+  const lim = +$("limit").value;
+  if (failAt[p] == null) { overRun[p] = m.rm > lim ? overRun[p] + 1 : 0; if (overRun[p] >= 3) failAt[p] = cycle; }
+  if (p === selected) { lastM = m; renderChain(); }
+}
+function fullCycleInstant() {
+  cycle++;
+  for (let p = 0; p < PINS; p++) recordScan(p, measure(p, cycle));
+}
+function shouldStop() { return cycle >= +$("maxc").value; }
+function stopRun(msg) {
+  running = false; $("run").textContent = "Run"; particles.visible = false; sense.visible = false;
+  carriage.position.x = XM; setPhase(msg || "mated, idle"); refreshPins(); drawChart(); paintContacts(-1);
+}
+function startRun() {
+  if (shouldStop()) return;
+  running = true; $("run").textContent = "Pause"; phase = "unplug"; phaseT = 0;
+}
+$("run").addEventListener("click", () => running ? stopRun("paused") : startRun());
+$("step").addEventListener("click", () => {
+  if (running) return;
+  fullCycleInstant(); setPath(selected); refreshPins(); drawChart(); paintContacts(-1); setPhase("one cycle done");
+});
+$("reset").addEventListener("click", () => { stopRun(); initModel(); lastR.fill(NaN); lastM = measure(selected, 0); renderChain(); refreshPins(); drawChart(); paintContacts(-1); });
+["limit", "wear", "maxc"].forEach(id => $(id).addEventListener("input", () => {
+  $("limit-v").textContent = (+$("limit").value).toFixed(1) + " mΩ";
+  $("wear-v").textContent = (+$("wear").value).toFixed(1) + "×";
+  $("maxc-v").textContent = $("maxc").value + " cycles";
+  refreshPins(); drawChart(); paintContacts(-1);
+}));
+["current", "gain"].forEach(id => $(id).addEventListener("change", () => { lastM = measure(selected, cycle); renderChain(); }));
+
+function tick(now) {
+  const dt = Math.min(100, now - lastFrame); lastFrame = now;
+  if (running) {
+    const mode = $("speed").value;
+    if (mode === "max" || reduce && mode !== "max") {
+      const per = mode === "max" ? 8 : 1;
+      for (let k = 0; k < per && !shouldStop(); k++) fullCycleInstant();
+      particles.visible = false; sense.visible = false; setPhase("scanning (maximum speed)");
+      chartDirty = true;
+      if (shouldStop()) stopRun(`stopped at ${cycle} cycles`);
+    } else {
+      const T = TIMING[mode];
+      phaseT += dt;
+      if (phase === "unplug") {
+        particles.visible = false; sense.visible = false; setPhase("unplugging");
+        const k = Math.min(1, phaseT / T.move); carriage.position.x = XM + (XOPEN - XM) * (0.5 - Math.cos(Math.PI * k) / 2);
+        if (k >= 1) { phase = "plug"; phaseT = 0; }
+      } else if (phase === "plug") {
+        setPhase("plugging in");
+        const k = Math.min(1, phaseT / T.move); carriage.position.x = XOPEN + (XM - XOPEN) * (0.5 - Math.cos(Math.PI * k) / 2);
+        if (k >= 1) { phase = "settle"; phaseT = 0; cycle++; }
+      } else if (phase === "settle") {
+        setPhase("mate detected, settling");
+        if (phaseT >= T.settle) { phase = "scan"; phaseT = 0; scanPin = 0; setPath(0); }
+      } else if (phase === "scan") {
+        particles.visible = true; sense.visible = true;
+        setPhase(`scanning pin ${scanPin + 1} of 16`);
+        if (phaseT >= T.pin) {
+          recordScan(scanPin, measure(scanPin, cycle));
+          paintContacts(scanPin);
+          scanPin++; phaseT = 0;
+          if (scanPin >= PINS) {
+            refreshPins(); chartDirty = true;
+            if (shouldStop()) stopRun(`stopped at ${cycle} cycles`);
+            else phase = "unplug";
+          } else setPath(scanPin);
+        }
+      }
+    }
+  }
+  if (chartDirty) { refreshPins(); drawChart(); paintContacts(running && phase === "scan" ? scanPin : -1); chartDirty = false; }
+  drawParticles(now / 1000);
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  if (w < 560) camera.position.set(10, 150, 230);
+  drawChart();
+}
+new ResizeObserver(resize).observe(stage);
+new ResizeObserver(() => drawChart()).observe(cv);
+
+initModel();
+lastM = measure(0, 0); renderChain(); setPath(0); sense.visible = false;
+refreshPins(); resize(); paintContacts(-1);
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

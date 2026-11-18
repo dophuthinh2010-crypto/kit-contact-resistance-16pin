@@ -27,6 +27,7 @@ linked by 34-way IDC ribbons (16 force + 16 sense + 2 GND).
 | `docs/concept_sketch.jpg` | Original concept sketch |
 | `docs/footprint_preview.png` | Preview of the connector footprints |
 | `docs/3d-model/index.html` | Interactive 3D model of the kit (open in a browser; loads three.js from a CDN) |
+| `docs/simulation/index.html` | 3D simulation: plug/unplug cycles, 16-pin scan through the ACS712 / INA333 / ADS1115 chain with noise, assumed wear model and life estimate |
 | `hardware/footprints/McMurdo_RedRange.pretty/` | KiCad footprints for RP16-T and RS16P-T |
 | `hardware/scripts/gen_mcmurdo_fp.py` | Script that generates those footprints |
 
