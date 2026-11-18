@@ -27,6 +27,11 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(parse_line("ERR,gain must be 11, 101 or 1001"), Error("gain must be 11, 101 or 1001"))
         self.assertEqual(parse_line("# hello"), Info("hello"))
 
+    def test_min_field(self):
+        d = parse_line("DATA,3,5,0.62,1.8,2.95,OK,2.871")
+        self.assertEqual(d.r_min_mohm, 2.871)
+        self.assertIsNone(parse_line("DATA,3,5,0.62,1.8,2.95,OK").r_min_mohm)
+
     def test_bad_lines(self):
         for bad in ["", "   ", "DATA,1,17,0.6,1,1,OK", "DATA,1,3,0.6,1,1,MAYBE", "DATA,x,3,0.6,1,1,OK", "garbage", "\x00\xff"]:
             self.assertIsNone(parse_line(bad), bad)
@@ -64,6 +69,14 @@ class TrackerTests(unittest.TestCase):
         self.assertEqual(t.pins[3].fail_cycle, 3)
         self.assertEqual(t.first_failure(), (3, 3))
 
+    def test_average_minimum(self):
+        t = Tracker()
+        t.add(Data(1, 6, 0.62, 1.8, 3.0, "OK", 2.8))
+        t.add(Data(2, 6, 0.62, 1.8, 3.2, "OK", 3.0))
+        t.add(Data(3, 6, 0.0, 0.0, math.nan, "OPEN", None))     # not a valid scan: no minimum
+        t.add(Data(4, 6, 0.62, 1.8, 3.1, "OK"))                 # older firmware: falls back to R
+        self.assertAlmostEqual(t.pins[6].avg_min, (2.8 + 3.0 + 3.1) / 3)
+
     def test_wear_status(self):
         t = Tracker(limit_mohm=10)
         t.add(Data(1, 4, 0.62, 5, 8.0, "OK"))
@@ -96,6 +109,24 @@ class RecorderTests(unittest.TestCase):
                 text = fh.read()
             self.assertIn("pin,first_mOhm", text)
             self.assertIn("1,2.900,3.100", text)
+
+
+class SimulationRunTests(unittest.TestCase):
+    def test_simrun(self):
+        kit = SimulatedKit(); kit.auto = False
+        kit.write(b"SIMRUN 5 20\n")
+        data, done = [], False
+        for _ in range(3000):
+            m = parse_line(kit.readline().decode())
+            if isinstance(m, Data):
+                data.append(m)
+            if m == Ack("SIMDONE"):
+                done = True
+                break
+        self.assertTrue(done)
+        self.assertEqual(len(data), 5 * 16)
+        self.assertEqual(max(d.cycle for d in data), 5)
+        self.assertTrue(all(d.r_min_mohm <= d.r_mohm + 1e-9 for d in data))
 
 
 class SimulatorTests(unittest.TestCase):

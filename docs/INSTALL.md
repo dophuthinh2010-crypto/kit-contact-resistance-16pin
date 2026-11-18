@@ -85,9 +85,14 @@ private folder `.venv`, so it doesn't touch the rest of your system.
 - in Command Prompt (with `.venv` activated): `python -m crkit_app`, or
 - in VS Code: open the `desktop-app` folder, pick the `.venv` interpreter (Ctrl+Shift+P → *Python: Select Interpreter*), open `run.py` and press F5.
 
-To check everything works before the hardware is ready: in **Port**, choose **Simulator (no hardware)** and
-click **Connect**. A simulated kit runs a plug/unplug cycle every 3 s and the table, plot and tiles fill in.
-Try **Start recording** too: a CSV appears in `Documents\CR-TEST`.
+To check everything works before the hardware is ready, use **Simulation mode** (left column):
+
+1. Click **Connect to the simulator**.
+2. Optional: enter a Sample ID and click **Start recording**, so the simulated readings are saved to CSV.
+3. Set **Run** (e.g. 100 cycles) and **Cycle time** (e.g. 1 s), then click **Run simulation**.
+4. Watch the table, the **R vs cycle** tab and the **Average minimum R per pin** tab fill in. **Stop** ends the run early.
+
+The simulated kit speaks the same protocol as the firmware; its contact wear is an assumed model.
 
 ## 4. Upload the firmware to the ESP32
 
@@ -167,7 +172,7 @@ cd /d D:\kit-contact-resistance-16pin\desktop-app
 python -m unittest discover tests
 ```
 
-All 10 tests should pass.
+All 13 tests should pass.
 
 ## 6. Optional: stand-alone CR-TEST.exe
 

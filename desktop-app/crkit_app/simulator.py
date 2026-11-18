@@ -29,6 +29,7 @@ class SimulatedKit:
         self.interval = cycle_interval_s
         self.speedup = speedup
         self._next = time.monotonic() + 1.0
+        self.sim_left = 0          # cycles still to run in a SIMRUN
         self.r0 = [2.2 + self._rng.random() * 1.3 for _ in range(16)]
         self.a = [6.2 if i == 10 else 3.0 * math.exp(self._rng.gauss(0, 0.22)) for i in range(16)]
         self.zero = [0.0] * 16
@@ -43,9 +44,14 @@ class SimulatedKit:
             with self._lock:
                 if self._out:
                     return (self._out.popleft() + "\n").encode()
-            if self.auto and time.monotonic() >= self._next:
+            if (self.auto or self.sim_left > 0) and time.monotonic() >= self._next:
                 self._next = time.monotonic() + self.interval
                 self._scan("MATE", True)
+                if self.sim_left > 0:
+                    self.sim_left -= 1
+                    if self.sim_left == 0:
+                        self._emit("# simulation run finished")
+                        self._emit("OK,SIMDONE")
                 continue
             time.sleep(0.01)
         return b""
@@ -67,7 +73,7 @@ class SimulatedKit:
             self._out.append(s)
 
     def _hello(self) -> None:
-        self._emit(f"HELLO,CRKIT,0.1.0-sim,{self.gain},{self.cycle}")
+        self._emit(f"HELLO,CRKIT,0.2.0-sim,{self.gain},{self.cycle}")
 
     def _true_r(self, p: int, n: int) -> float:
         r = self.r0[p] + self.a[p] * (n / 500) ** 1.6
@@ -88,8 +94,13 @@ class SimulatedKit:
                 continue
             rt = self._true_r(p, n) / 1000
             i_true = 5 / (5.6 + 2.2 + 0.18 + rt)
-            i = i_true + self._rng.gauss(0, 0.004 / math.sqrt(8) / 0.185)
-            vi = self.gain * (i_true * rt + self._rng.gauss(0, 1.5e-6)) + self._rng.gauss(0, 0.0003)
+            samples, i_sum, vi_sum = [], 0.0, 0.0
+            for _ in range(8):                               # 8 readings per pin, like the firmware
+                i_s = i_true + self._rng.gauss(0, 0.004 / 0.185)
+                vi_s = self.gain * (i_true * rt + self._rng.gauss(0, 1.5e-6)) + self._rng.gauss(0, 0.0008)
+                i_sum += i_s; vi_sum += vi_s
+                samples.append(vi_s / self.gain / i_s * 1000)
+            i, vi = i_sum / 8, vi_sum / 8
             flag = "OK"
             if vi >= 3.2:
                 flag, vi = "OVER", 3.25
@@ -98,7 +109,8 @@ class SimulatedKit:
             vc = vi / self.gain
             raw[p] = vc / i * 1000
             r = (raw[p] - self.zero[p]) * self.gcorr
-            self._emit(f"DATA,{self.cycle},{p + 1},{i:.4f},{vc * 1000:.4f},{r:.4f},{flag}")
+            rmin = (min(samples) - self.zero[p]) * self.gcorr
+            self._emit(f"DATA,{self.cycle},{p + 1},{i:.4f},{vc * 1000:.4f},{r:.4f},{flag},{rmin:.4f}")
         self._emit(f"END,{self.cycle},{int(420 / self.speedup)}")
         return raw
 
@@ -142,6 +154,20 @@ class SimulatedKit:
             self.gcorr = ref / (raw[0] - self.zero[0])
             self._emit(f"# gain correction = {self.gcorr:.4f}")
             self._emit("OK,CALREF")
+        elif cmd == "SIMRUN":                                 # simulator only: run N cycles, one every T ms
+            try:
+                parts = arg.split()
+                n = int(parts[0]); ms = int(parts[1]) if len(parts) > 1 else 1000
+                if n < 1 or ms < 20:
+                    raise ValueError
+            except (ValueError, IndexError):
+                self._emit("ERR,use SIMRUN <cycles> <ms per cycle>, e.g. SIMRUN 100 1000"); return
+            self.auto = False
+            self.sim_left, self.interval = n, ms / 1000
+            self._next = time.monotonic() + self.interval
+            self._emit("OK,SIMRUN")
+        elif cmd == "SIMSTOP":
+            self.sim_left = 0; self._emit("OK,SIMSTOP")
         elif cmd == "CALCLEAR":
             self.zero, self.gcorr = [0.0] * 16, 1.0; self._emit("OK,CALCLEAR")
         else:

@@ -93,11 +93,29 @@ h2 { font-size: 12px; font-weight: 600; margin: 0 0 10px; color: var(--muted); t
 .parts button span { font: 12px var(--mono); color: var(--muted); }
 .parts button:hover, .parts button.on { background: #212b37; }
 .parts button:focus-visible { outline: 2px solid var(--brass); }
+.parts li { display: flex; gap: 4px; align-items: stretch; }
+.parts li .pick { flex: 1; min-width: 0; }
+.parts li.off .pick { color: var(--muted); text-decoration: line-through; }
+.parts .eye {
+  flex: 0 0 auto; width: auto; justify-content: center; padding: 6px 10px;
+  font: 500 11.5px var(--mono); color: var(--ink); border: 1px solid var(--line);
+}
+.parts .eye[aria-pressed="false"] { color: var(--muted); border-style: dashed; }
+.vis-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.vis-bar .btn { padding: 5px 10px; font-size: 12px; }
+#hidden-count { font: 12px var(--mono); color: var(--muted); align-self: center; }
 .scanhead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
 .scanhead b { font: 500 13px var(--mono); }
 #bars { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; height: 92px; align-items: end; position: relative; }
 #bars .bar { background: var(--ok); border-radius: 2px 2px 0 0; min-height: 2px; transition: height .3s; }
 #bars .bar.bad { background: var(--bad); }
+#avgwrap { position: relative; height: 120px; padding-left: 34px; }
+#avgbars { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; height: 100%; align-items: end; position: relative; }
+#avgbars .abar { background: var(--brass); border-radius: 2px 2px 0 0; min-height: 0; transition: height .3s; }
+#avgbars .abar.hi { outline: 2px solid var(--ink); outline-offset: 1px; }
+.grid { position: absolute; left: 34px; right: 0; border-top: 1px solid var(--line); pointer-events: none; }
+.grid span { position: absolute; left: -34px; top: -7px; width: 30px; text-align: right; font: 10px var(--mono); color: var(--muted); }
+#avgpins { padding-left: 34px; }
 #limit { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--bad); pointer-events: none; }
 #limit span { position: absolute; right: 0; top: -15px; font: 10px var(--mono); color: var(--bad); }
 .pins { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; font: 9px var(--mono); color: var(--muted); text-align: center; margin-top: 3px; }
@@ -112,7 +130,7 @@ td:last-child { text-align: right; font-family: var(--mono); font-variant-numeri
   .btn { padding: 6px 9px; font-size: 12px; }
   #tip { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { #bars .bar { transition: none; } }
+@media (prefers-reduced-motion: reduce) { #bars .bar, #avgbars .abar { transition: none; } }
 </style>
 <script type="importmap">
 { "imports": {
@@ -126,13 +144,15 @@ td:last-child { text-align: right; font-family: var(--mono); font-variant-numeri
   <div id="hud">
     <button class="btn primary" id="cycle" type="button">Plug / unplug once</button>
     <button class="btn" id="auto" type="button" aria-pressed="false">Auto cycle</button>
+    <button class="btn" id="reset" type="button">Reset</button>
     <span class="sep" aria-hidden="true"></span>
     <button class="btn" data-view="overview" type="button">Overview</button>
     <button class="btn" data-view="main" type="button">Main board</button>
     <button class="btn" data-view="jack" type="button">Connector</button>
+    <button class="btn" data-view="laptop" type="button">Laptop</button>
   </div>
   <div id="hover"></div>
-  <div id="tip">Drag to rotate · scroll or pinch to zoom · click a part</div>
+  <div id="tip">Drag to rotate · scroll or pinch to zoom · click a part · H hides or shows it</div>
 </div>
 
 <aside>
@@ -153,7 +173,7 @@ td:last-child { text-align: right; font-family: var(--mono); font-variant-numeri
   <section id="info" aria-live="polite">
     <span class="ref">KIT</span>
     <h3>Complete kit</h3>
-    <p>Click any part in the model or the list below to see what it does.</p>
+    <p>Click any part in the model or the list below to see what it does. Use Hide / Show in the list to take parts out of the view.</p>
   </section>
 
   <section>
@@ -164,7 +184,22 @@ td:last-child { text-align: right; font-family: var(--mono); font-variant-numeri
   </section>
 
   <section>
+    <div class="scanhead"><h2 style="margin:0">Average minimum R per pin</h2><b id="avg-n">0 cycles</b></div>
+    <div id="avgwrap">
+      <div id="avgbars"></div>
+    </div>
+    <div class="pins" id="avgpins"></div>
+    <p class="note" id="avg-note">No cycles yet. Press Plug / unplug once or Auto cycle.</p>
+    <p class="note">Each cycle keeps the lowest of 8 readings for every pin. A bar is the average of those minimums over all cycles, so you can compare pin to pin.</p>
+  </section>
+
+  <section>
     <h2>Parts in the model</h2>
+    <div class="vis-bar">
+      <button class="btn" id="show-all" type="button">Show all</button>
+      <button class="btn" id="isolate" type="button">Show only selected</button>
+      <span id="hidden-count"></span>
+    </div>
     <ul class="parts" id="partlist"></ul>
   </section>
 
@@ -204,9 +239,11 @@ const PARTS = {
   plug:     { ref: "J_JACK", name: "RP16-T plug (device under test)", text: "ITW McMurdo Red Range, 16 way, 2 rows × 8 at 4.70 mm pitch. Rated 5 mΩ initially, 10 mΩ after conditioning, 500 cycles." },
   socket:   { ref: "J_JACK", name: "RS16P-T socket (device under test)", text: "Mates with the plug. Pin n meets pin n; the plate sits 14.49 mm from the plug plate when mated." },
   fixture:  { ref: "FIX", name: "Plug/unplug fixture", text: "The male board rides a carriage on a linear rail. Push the handle to mate, pull to unmate." },
+  laptop:   { ref: "PC", name: "Laptop running the CR-TEST app", text: "Reads the ESP32 over USB, records every reading to CSV and draws the Average minimum R per pin chart live. The screen updates after every cycle." },
+  usb:      { ref: "USB", name: "USB cable (USB-C to Micro-USB)", text: "Data link to the laptop, and the ESP32's only power source. The kit's 5 V adapter powers everything else." },
   sw:       { ref: "J4", name: "Mate-detect microswitch", text: "Closes when the carriage reaches the mated position. Each closure counts one cycle and starts a scan." },
 };
-const LIST = ["main","esp32","acs","fets","sr","mux","ina","adc","res","power","idc","ribbon","male","female","plug","socket","fixture","sw"];
+const LIST = ["main","esp32","acs","fets","sr","mux","ina","adc","res","power","idc","ribbon","male","female","plug","socket","fixture","sw","laptop","usb"];
 
 // ---------- renderer / scene ----------
 const stage = document.getElementById("stage");
@@ -228,14 +265,14 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.49;
 controls.minDistance = 60;
-controls.maxDistance = 900;
+controls.maxDistance = 1100;
 
 scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x1a1f26, 0.6));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6);
 sun.position.set(-120, 260, 160);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -200, right: 200, top: 160, bottom: -160, near: 50, far: 600 });
+Object.assign(sun.shadow.camera, { left: -460, right: 220, top: 220, bottom: -220, near: 50, far: 800 });
 sun.shadow.bias = -0.0005;
 scene.add(sun);
 
@@ -436,6 +473,89 @@ esp.add(box(3.5, 1.6, 3.5, M.ic, -19, 10.9, 8));
 esp.add(box(5, 1.5, 5, M.ic, -8, 10.8, 0));                  // USB-UART
 MB.add(tag(esp, "esp32"));
 
+// ---------- laptop + USB cable ----------
+const LAP = { x: -330, z: 25, y: -12 };                  // laptop sits on the bench left of the base plate
+const lapScreen = document.createElement("canvas"); lapScreen.width = 1024; lapScreen.height = 660;
+const lapTex = new THREE.CanvasTexture(lapScreen); lapTex.colorSpace = THREE.SRGBColorSpace; lapTex.anisotropy = 8;
+const laptop = new THREE.Group();
+laptop.position.set(LAP.x, LAP.y, LAP.z);
+laptop.rotation.y = 0.18;                                // turned a little toward the kit
+const lapAlu = new THREE.MeshStandardMaterial({ color: 0x3a4047, metalness: 0.6, roughness: 0.45 });
+laptop.add(box(320, 16, 220, lapAlu, 0, 8, 0));
+laptop.add(box(290, 0.6, 105, M.black, 0, 16.3, -25));    // keyboard
+laptop.add(box(110, 0.4, 66, new THREE.MeshStandardMaterial({ color: 0x2e343a, roughness: 0.3 }), 0, 16.2, 68));   // trackpad
+laptop.add(box(4, 3, 9, M.black, 160.5, 8, -60));          // USB-C port, right side
+const lid = new THREE.Group();
+lid.position.set(0, 16, -110);                           // hinge at the back edge
+lid.rotation.x = -0.26;                                  // opened about 105°
+lid.add(box(320, 210, 6, lapAlu, 0, 105, -3));
+const disp = new THREE.Mesh(new THREE.PlaneGeometry(300, 192), new THREE.MeshBasicMaterial({ map: lapTex, toneMapped: false }));
+disp.position.set(0, 107, 0.2);
+lid.add(disp);
+laptop.add(lid);
+scene.add(tag(laptop, "laptop"));
+
+// USB cable from the ESP32's Micro-USB socket to the laptop's port
+const usbFrom = new THREE.Vector3(-75 - 17 - 26 - 4, 12.4 + T + 11.6, -24);      // ESP32 USB socket (left end of the DevKitC)
+const portLocal = new THREE.Vector3(164, 8, -60);
+laptop.updateMatrixWorld(true);
+const usbTo = laptop.localToWorld(portLocal.clone());
+const usbCurve = new THREE.CatmullRomCurve3([
+  usbFrom, usbFrom.clone().add(V(-14, -1, 0)), V(-146, 10, -26), V(-152, -6, -30),
+  usbTo.clone().add(V(24, -6, 2)), usbTo.clone().add(V(8, 0, 0)), usbTo
+], false, "centripetal");
+const usbGroup = new THREE.Group();
+usbGroup.add(new THREE.Mesh(new THREE.TubeGeometry(usbCurve, 80, 1.6, 10, false), M.black));
+const plugA = box(10, 4, 7, M.grey, usbFrom.x - 5, usbFrom.y, usbFrom.z); usbGroup.add(plugA);
+const plugB = box(12, 4.5, 8, M.grey, 0, 0, 0); plugB.position.copy(usbTo.clone().add(V(6, 0, 0))); plugB.rotation.y = laptop.rotation.y; usbGroup.add(plugB);
+scene.add(tag(usbGroup, "usb"));
+
+function drawLaptop(avg, n, hi, lo) {
+  const g = lapScreen.getContext("2d"), W = lapScreen.width, H = lapScreen.height;
+  const mono = '"IBM Plex Mono", Consolas, monospace', sans = '"IBM Plex Sans", "Segoe UI", sans-serif';
+  g.fillStyle = "#11161d"; g.fillRect(0, 0, W, H);
+  g.fillStyle = "#1c2530"; g.fillRect(0, 0, W, 44);                       // title bar
+  g.fillStyle = "#e6ebf0"; g.font = `600 20px ${sans}`; g.fillText("CR-TEST  Contact Resistance Recorder", 18, 29);
+  g.fillStyle = "#4fb286"; g.beginPath(); g.arc(W - 250, 22, 6, 0, Math.PI * 2); g.fill();
+  g.fillStyle = "#8d9aa8"; g.font = `16px ${mono}`; g.fillText("COM5 · recording", W - 236, 28);
+  const tiles = [["cycles", String(n)], ["pins failed", "0 / 16"],
+                 ["highest", n ? `p${hi + 1} ${avg[hi].toFixed(2)}` : "–"], ["lowest", n ? `p${lo + 1} ${avg[lo].toFixed(2)}` : "–"]];
+  tiles.forEach(([cap, val], i) => {
+    const x = 18 + i * 250;
+    g.fillStyle = "#1c2530"; g.fillRect(x, 62, 236, 74);
+    g.fillStyle = "#e6ebf0"; g.font = `500 28px ${mono}`; g.fillText(val, x + 14, 102);
+    g.fillStyle = "#8d9aa8"; g.font = `15px ${sans}`; g.fillText(cap, x + 14, 125);
+  });
+  g.fillStyle = "#e6ebf0"; g.font = `600 22px ${sans}`; g.fillText("Average minimum R per pin", 18, 178);
+  g.fillStyle = "#8d9aa8"; g.font = `15px ${sans}`;
+  g.fillText(n ? `lowest of 8 readings per cycle, averaged over ${n} cycle${n === 1 ? "" : "s"}` : "waiting for the first cycle…", 18, 202);
+  const cx = 70, cy = 228, cw = W - cx - 30, ch = H - cy - 60;              // plot area
+  const top = n ? Math.max(1, Math.ceil(Math.max(...avg) * 1.15)) : 4;
+  const step = top <= 4 ? 1 : top <= 10 ? 2 : 5;
+  g.font = `15px ${mono}`; g.textAlign = "right";
+  for (let v = 0; v <= top; v += step) {
+    const y = cy + ch - v / top * ch;
+    g.strokeStyle = "#2a3542"; g.lineWidth = 1; g.beginPath(); g.moveTo(cx, y + 0.5); g.lineTo(cx + cw, y + 0.5); g.stroke();
+    g.fillStyle = "#8d9aa8"; g.fillText(String(v), cx - 10, y + 5);
+  }
+  g.save(); g.translate(22, cy + ch / 2); g.rotate(-Math.PI / 2); g.textAlign = "center"; g.fillText("mΩ", 0, 0); g.restore();
+  const slot = cw / 16, bw = slot * 0.7;
+  g.textAlign = "center";
+  for (let i = 0; i < 16; i++) {
+    const x = cx + i * slot + (slot - bw) / 2;
+    if (n) {
+      const h = avg[i] / top * ch;
+      g.fillStyle = "#d9a441"; g.fillRect(x, cy + ch - h, bw, h);
+      if (i === hi) { g.strokeStyle = "#e6ebf0"; g.lineWidth = 3; g.strokeRect(x - 2, cy + ch - h - 2, bw + 4, h + 2); }
+      if (i === hi || i === lo) { g.fillStyle = "#e6ebf0"; g.font = `500 15px ${mono}`; g.fillText(avg[i].toFixed(2), x + bw / 2, cy + ch - h - 10); }
+    }
+    g.fillStyle = "#8d9aa8"; g.font = `15px ${mono}`; g.fillText(String(i + 1), x + bw / 2, cy + ch + 22);
+  }
+  g.fillText("pin", cx + cw / 2, cy + ch + 46);
+  g.textAlign = "left";
+  lapTex.needsUpdate = true;
+}
+
 // ---------- fixture: rail, female mount, carriage ----------
 const FIX = new THREE.Group();
 scene.add(FIX);
@@ -548,7 +668,7 @@ function updateRibbons(xm) {
 }
 
 // ---------- state / animation ----------
-let xm = XM_MATED, target = XM_MATED, cycle = 0, busy = false, auto = false;
+let xm = XM_MATED, target = XM_MATED, cycle = 0, busy = false, auto = false, epoch = 0;
 carriage.position.x = xm; updateRibbons(xm);
 const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -556,8 +676,9 @@ function setCarriage(x) { xm = x; carriage.position.x = x; updateRibbons(x); lev
 function animateTo(x, ms) {
   return new Promise(res => {
     if (reduce) { setCarriage(x); return res(); }
-    const x0 = xm, t0 = performance.now();
+    const x0 = xm, t0 = performance.now(), ep = epoch;
     function step(now) {
+      if (ep !== epoch) return res();          // Reset pressed: stop here
       const k = Math.min(1, (now - t0) / ms), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
       setCarriage(x0 + (x - x0) * e);
       k < 1 ? requestAnimationFrame(step) : res();
@@ -565,11 +686,17 @@ function animateTo(x, ms) {
     requestAnimationFrame(step);
   });
 }
+const CYCLE_MS = { move: 1350, pause: 300 };
 async function plugCycle() {
   if (busy) return; busy = true;
-  await animateTo(XM_OPEN, 700);
-  await new Promise(r => setTimeout(r, reduce ? 0 : 250));
-  await animateTo(XM_MATED, 700);
+  const ep = epoch;
+  // one full plug/unplug cycle = 3 s: unplug 1.35 s, pause 0.3 s, plug 1.35 s
+  await animateTo(XM_OPEN, CYCLE_MS.move);
+  if (ep !== epoch) return;
+  await new Promise(r => setTimeout(r, reduce ? 0 : CYCLE_MS.pause));
+  if (ep !== epoch) return;
+  await animateTo(XM_MATED, CYCLE_MS.move);
+  if (ep !== epoch) return;                  // Reset pressed during the cycle
   cycle++; scan(); busy = false;
 }
 document.getElementById("cycle").addEventListener("click", plugCycle);
@@ -578,8 +705,17 @@ let autoTimer = null;
 autoBtn.addEventListener("click", () => {
   auto = !auto; autoBtn.setAttribute("aria-pressed", String(auto));
   autoBtn.textContent = auto ? "Stop auto cycle" : "Auto cycle";
-  if (auto) { const loop = async () => { if (!auto) return; await plugCycle(); autoTimer = setTimeout(loop, 400); }; loop(); }
+  if (auto) { const loop = async () => { if (!auto) return; await plugCycle(); autoTimer = setTimeout(loop, 0); }; /* back to back: one cycle every 3 s */ loop(); }
   else clearTimeout(autoTimer);
+});
+document.getElementById("reset").addEventListener("click", () => {
+  epoch++; busy = false;
+  if (auto) { auto = false; autoBtn.setAttribute("aria-pressed", "false"); autoBtn.textContent = "Auto cycle"; }
+  clearTimeout(autoTimer);
+  setCarriage(XM_MATED);
+  cycle = 0; seed = SEED_AFTER_SETUP;
+  minHist.forEach(h => (h.length = 0));
+  scan();
 });
 
 // ---------- simulated readout ----------
@@ -594,28 +730,114 @@ for (let i = 0; i < 16; i++) {
   const b = document.createElement("div"); b.className = "bar"; barsEl.appendChild(b); bars.push(b);
   const p = document.createElement("div"); p.textContent = i + 1; pinsEl.appendChild(p);
 }
+const SEED_AFTER_SETUP = seed;
+const SAMPLES = 8;
+const minHist = Array.from({ length: 16 }, () => []);     // per pin: the lowest reading of each cycle
+const avgEl = document.getElementById("avgbars"), avgPins = document.getElementById("avgpins"), avgWrap = document.getElementById("avgwrap");
+const abars = [];
+for (let i = 0; i < 16; i++) {
+  const b = document.createElement("div"); b.className = "abar"; avgEl.appendChild(b); abars.push(b);
+  const p = document.createElement("div"); p.textContent = i + 1; avgPins.appendChild(p);
+}
 function scan() {
   document.getElementById("cyc").textContent = "cycle " + cycle;
   for (let i = 0; i < 16; i++) {
-    const r = baseR[i] + wear[i] * cycle * 6 + (rnd() - 0.5) * 0.25;
+    let sum = 0, min = Infinity;
+    for (let k = 0; k < SAMPLES; k++) {
+      const r = baseR[i] + wear[i] * cycle * 6 + (rnd() - 0.5) * 0.25;
+      sum += r; if (r < min) min = r;
+    }
+    const r = sum / SAMPLES;
     bars[i].style.height = Math.min(100, r / SCALE * 100) + "%";
     bars[i].classList.toggle("bad", r > 10);
-    bars[i].title = `Pin ${i + 1}: ${r.toFixed(2)} mΩ`;
+    bars[i].title = `Pin ${i + 1}: ${r.toFixed(2)} mΩ (min ${min.toFixed(2)})`;
+    if (cycle > 0) minHist[i].push(min);
   }
+  drawAvg();
 }
+function drawAvg() {
+  const n = minHist[0].length;
+  document.getElementById("avg-n").textContent = n + (n === 1 ? " cycle" : " cycles");
+  avgWrap.querySelectorAll(".grid").forEach(g => g.remove());
+  if (!n) {
+    abars.forEach(b => { b.style.height = "0"; b.title = ""; b.classList.remove("hi"); });
+    document.getElementById("avg-note").textContent = "No cycles yet. Press Plug / unplug once or Auto cycle.";
+    drawLaptop([], 0, 0, 0);
+    return;
+  }
+  const avg = minHist.map(h => h.reduce((a, v) => a + v, 0) / h.length);
+  const top = Math.max(1, Math.ceil(Math.max(...avg) * 1.15));          // whole mΩ, bars start at 0
+  const step = top <= 4 ? 1 : top <= 10 ? 2 : 5;
+  for (let v = 0; v <= top; v += step) {
+    const g = document.createElement("div"); g.className = "grid";
+    g.style.bottom = (v / top * 100) + "%";
+    g.innerHTML = `<span>${v}</span>`;
+    avgWrap.appendChild(g);
+  }
+  let hi = 0, lo = 0;
+  avg.forEach((v, i) => { if (v > avg[hi]) hi = i; if (v < avg[lo]) lo = i; });
+  abars.forEach((b, i) => {
+    b.style.height = (avg[i] / top * 100) + "%";
+    b.classList.toggle("hi", i === hi);
+    b.title = `Pin ${i + 1}: average minimum ${avg[i].toFixed(3)} mΩ over ${n} cycles`;
+  });
+  document.getElementById("avg-note").textContent =
+    `Highest: pin ${hi + 1}, ${avg[hi].toFixed(2)} mΩ (outlined) · lowest: pin ${lo + 1}, ${avg[lo].toFixed(2)} mΩ · spread ${(avg[hi] - avg[lo]).toFixed(2)} mΩ (mΩ scale)`;
+  drawLaptop(avg, n, hi, lo);
+}
+document.fonts?.ready.then(() => drawAvg());
 scan();
 
 // ---------- picking / info ----------
 const info = document.getElementById("info");
 const listEl = document.getElementById("partlist");
+// ---------- hide / unhide ----------
+const hidden = new Set();
+const eyeBtns = {};
+function setHidden(k, hide) {
+  hide ? hidden.add(k) : hidden.delete(k);
+  partMeshes[k]?.forEach(m => { m.visible = !hide; });
+  const btn = eyeBtns[k];
+  if (btn) {
+    btn.setAttribute("aria-pressed", String(!hide));
+    btn.textContent = hide ? "Show" : "Hide";
+    btn.setAttribute("aria-label", `${hide ? "Show" : "Hide"} ${PARTS[k].name}`);
+    btn.closest("li").classList.toggle("off", hide);
+  }
+  const n = hidden.size;
+  document.getElementById("hidden-count").textContent = n ? `${n} hidden` : "";
+  if (hide && selected === k) renderInfo(k);
+}
+function renderInfo(k) {
+  const p = PARTS[k];
+  const off = hidden.has(k);
+  info.innerHTML = `<span class="ref">${p.ref}</span><h3>${p.name}</h3><p>${p.text}</p>` +
+    (k === "kit" ? "" : `<p><button class="btn" type="button" id="info-toggle">${off ? "Show this part" : "Hide this part"}</button></p>`);
+  const t = document.getElementById("info-toggle");
+  if (t) t.addEventListener("click", () => { setHidden(k, !hidden.has(k)); renderInfo(k); });
+}
+document.getElementById("show-all").addEventListener("click", () => LIST.forEach(k => setHidden(k, false)));
+document.getElementById("isolate").addEventListener("click", () => {
+  if (!selected) { info.querySelector("p").textContent = "Select a part first, then press Show only selected."; return; }
+  LIST.forEach(k => setHidden(k, k !== selected));
+});
+window.addEventListener("keydown", e => {
+  if (e.target.closest("input, textarea") || !selected || selected === "kit") return;
+  if (e.key === "h" || e.key === "H") setHidden(selected, !hidden.has(selected));
+});
+
 LIST.forEach(k => {
   const li = document.createElement("li");
-  const b = document.createElement("button"); b.type = "button"; b.dataset.part = k;
+  const b = document.createElement("button"); b.type = "button"; b.dataset.part = k; b.className = "pick";
   b.innerHTML = `${PARTS[k].name}<span>${PARTS[k].ref}</span>`;
   b.addEventListener("click", () => select(k));
   b.addEventListener("mouseenter", () => highlight(k));
   b.addEventListener("mouseleave", () => highlight(selected));
-  li.appendChild(b); listEl.appendChild(li);
+  const eye = document.createElement("button"); eye.type = "button"; eye.className = "eye";
+  eye.textContent = "Hide"; eye.setAttribute("aria-pressed", "true"); eye.setAttribute("aria-label", `Hide ${PARTS[k].name}`);
+  eye.addEventListener("click", () => setHidden(k, !hidden.has(k)));
+  eyeBtns[k] = eye;
+  li.appendChild(b); li.appendChild(eye); listEl.appendChild(li);
 });
 let selected = null, lit = null;
 function highlight(k) {
@@ -631,8 +853,7 @@ function highlight(k) {
 }
 function select(k) {
   selected = k;
-  const p = PARTS[k];
-  info.innerHTML = `<span class="ref">${p.ref}</span><h3>${p.name}</h3><p>${p.text}</p>`;
+  renderInfo(k);
   listEl.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.part === k));
   highlight(k);
 }
@@ -643,7 +864,9 @@ function pick(ev) {
   const r = renderer.domElement.getBoundingClientRect();
   ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
-  const hit = ray.intersectObjects(pickables, false)[0];
+  // hidden parts don't block clicks: skip any mesh that is hidden itself or through a parent
+  const shown = o => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
+  const hit = ray.intersectObjects(pickables, false).find(h => shown(h.object));
   return hit ? hit.object.userData.part : null;
 }
 renderer.domElement.addEventListener("pointerdown", e => { down = [e.clientX, e.clientY]; });
@@ -664,7 +887,8 @@ renderer.domElement.addEventListener("pointermove", e => {
 
 // ---------- views ----------
 const VIEWS = {
-  overview: { pos: V(-170, 230, 300), tgt: V(10, 25, 0) },
+  overview: { pos: V(-260, 300, 430), tgt: V(-70, 30, 0) },
+  laptop:   { pos: V(-296, 160, 200), tgt: V(-352, 100, -108) },
   main:     { pos: V(-75, 175, 125), tgt: V(-75, 12, 0) },
   jack:     { pos: V(60, 95, 120), tgt: V(100, 40, 0) },
 };
@@ -686,7 +910,7 @@ function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
   renderer.setSize(w, h, false); camera.aspect = w / h;
   const narrow = w < 560;
-  VIEWS.overview.pos.set(narrow ? -230 : -170, narrow ? 300 : 230, narrow ? 420 : 300);
+  VIEWS.overview.pos.set(narrow ? -330 : -260, narrow ? 400 : 300, narrow ? 580 : 430);
   camera.updateProjectionMatrix();
 }
 new ResizeObserver(resize).observe(stage);

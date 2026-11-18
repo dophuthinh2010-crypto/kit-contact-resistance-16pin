@@ -36,6 +36,7 @@ class Data:
     voltage_mv: float
     r_mohm: float
     flag: str
+    r_min_mohm: Optional[float] = None   # lowest of the 8 readings in this scan (firmware 0.2+), None if not sent
 
 
 @dataclass(frozen=True)
@@ -88,7 +89,8 @@ def parse_line(line: str) -> Optional[Message]:
             flag = parts[6].upper()
             if not 1 <= pin <= NPINS or flag not in FLAGS:
                 return None
-            return Data(int(parts[1]), pin, _num(parts[3]), _num(parts[4]), _num(parts[5]), flag)
+            rmin = _num(parts[7]) if len(parts) >= 8 and parts[7] else None
+            return Data(int(parts[1]), pin, _num(parts[3]), _num(parts[4]), _num(parts[5]), flag, rmin)
         if kind == "END" and len(parts) >= 3:
             return CycleEnd(int(parts[1]), int(parts[2]))
         if kind == "OK" and len(parts) >= 2:

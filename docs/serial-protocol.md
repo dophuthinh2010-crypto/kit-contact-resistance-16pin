@@ -10,7 +10,7 @@ lines end with `\n`. Fields are comma-separated. Lines starting with `#` are fre
 | `HELLO,CRKIT,<fw>,<gain>,<cycle>` | at boot and in reply to `STATUS` | firmware version, INA333 gain set in firmware, current cycle counter |
 | `CYCLE,<n>,<trigger>` | start of a scan | cycle number, `MATE` (mate-detect switch) or `MANUAL` (`SCAN` command) |
 | `ZERO,<n>,<v0_V>,<v5_V>` | after the zero read | ACS712 zero output, measured 5 V rail |
-| `DATA,<n>,<pin>,<I_A>,<V_mV>,<R_mOhm>,<flag>` | once per pin (16 per scan) | cycle, pin 1–16, measured current, contact voltage, resistance (after calibration), flag |
+| `DATA,<n>,<pin>,<I_A>,<V_mV>,<R_mOhm>,<flag>,<Rmin_mOhm>` | once per pin (16 per scan) | cycle, pin 1–16, measured current, contact voltage, resistance (average of 8 readings, after calibration), flag, lowest of the 8 readings (firmware 0.2+; parsers treat it as optional) |
 | `END,<n>,<ms>` | end of a scan | cycle, scan duration in ms |
 | `OK,<command>` | a command was accepted | |
 | `ERR,<text>` | a command was refused | reason |
@@ -36,5 +36,7 @@ lines end with `\n`. Fields are comma-separated. Lines starting with `#` are fre
 | `CALZERO` | with the shorting bar fitted: scans and stores each pin's reading as its zero offset |
 | `CALREF <mOhm>` | with a reference shunt on pin 1: scans pin 1 and stores a gain correction |
 | `CALCLEAR` | clears both calibrations |
+| `SIMRUN <cycles> <ms>` | **simulator only:** runs that many cycles, one every `<ms>`, then sends `OK,SIMDONE` |
+| `SIMSTOP` | **simulator only:** stops a `SIMRUN` |
 
 Settings, calibration and the cycle counter are kept in the ESP32's flash, so they survive a power cycle.

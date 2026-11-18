@@ -20,6 +20,12 @@ class PinState:
     maximum: float = -math.inf
     over_run: int = 0
     fail_cycle: Optional[int] = None
+    mins: List[float] = field(default_factory=list)      # per-cycle minimum R (valid scans only)
+
+    @property
+    def avg_min(self) -> float:
+        """Average of the per-cycle minimum readings, mOhm."""
+        return sum(self.mins) / len(self.mins) if self.mins else math.nan
 
     @property
     def delta(self) -> float:
@@ -55,6 +61,8 @@ class Tracker:
         st.latest = value
         st.latest_flag = d.flag
         if valid:
+            m = d.r_min_mohm if d.r_min_mohm is not None and not math.isnan(d.r_min_mohm) else value
+            st.mins.append(m)
             if math.isnan(st.initial):
                 st.initial = value
             st.minimum = min(st.minimum, value)

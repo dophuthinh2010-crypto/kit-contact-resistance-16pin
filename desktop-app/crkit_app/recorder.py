@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, TextIO, Tuple
 
 from .protocol import Data
 
-COLUMNS = ["timestamp", "cycle", "pin", "current_A", "voltage_mV", "r_mOhm", "flag", "trigger"]
+COLUMNS = ["timestamp", "cycle", "pin", "current_A", "voltage_mV", "r_mOhm", "flag", "trigger", "r_min_mOhm"]
 
 
 class SessionRecorder:
@@ -51,8 +51,9 @@ class SessionRecorder:
         if not self._writer:
             return
         r = "" if math.isnan(d.r_mohm) else f"{d.r_mohm:.4f}"
+        rmin = "" if d.r_min_mohm is None or math.isnan(d.r_min_mohm) else f"{d.r_min_mohm:.4f}"
         self._writer.writerow([datetime.now().isoformat(timespec="milliseconds"), d.cycle, d.pin,
-                               f"{d.current_a:.4f}", f"{d.voltage_mv:.4f}", r, d.flag, trigger])
+                               f"{d.current_a:.4f}", f"{d.voltage_mv:.4f}", r, d.flag, trigger, rmin])
         self.rows_written += 1
 
     def flush(self) -> None:
@@ -83,8 +84,9 @@ def load_session(path: str) -> Tuple[Dict[str, str], List[Data]]:
     for rec in csv.DictReader(body):
         try:
             r = float(rec["r_mOhm"]) if rec["r_mOhm"] else math.nan
+            rmin = float(rec["r_min_mOhm"]) if rec.get("r_min_mOhm") else None    # older logs have no such column
             rows.append(Data(int(rec["cycle"]), int(rec["pin"]), float(rec["current_A"]),
-                             float(rec["voltage_mV"]), r, rec["flag"]))
+                             float(rec["voltage_mV"]), r, rec["flag"], rmin))
         except (KeyError, ValueError):
             continue
     return meta, rows
@@ -97,8 +99,8 @@ def write_summary(path: str, tracker, meta: Dict[str, str]) -> None:
             fh.write(f"# {k}: {v}\n")
         fh.write(f"# fail rule: {tracker.consecutive} scans in a row above {tracker.limit} mOhm\n")
         w = csv.writer(fh)
-        w.writerow(["pin", "first_mOhm", "latest_mOhm", "min_mOhm", "max_mOhm", "change_mOhm", "status", "fail_cycle"])
+        w.writerow(["pin", "first_mOhm", "latest_mOhm", "min_mOhm", "max_mOhm", "change_mOhm", "avg_min_mOhm", "status", "fail_cycle"])
         f = lambda v: "" if (v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v)))) else f"{v:.3f}"
         for p, st in tracker.pins.items():
-            w.writerow([p, f(st.initial), f(st.latest), f(st.minimum), f(st.maximum), f(st.delta),
+            w.writerow([p, f(st.initial), f(st.latest), f(st.minimum), f(st.maximum), f(st.delta), f(st.avg_min),
                         tracker.status(p), st.fail_cycle if st.fail_cycle is not None else ""])

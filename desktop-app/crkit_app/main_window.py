@@ -13,7 +13,7 @@ from PySide6.QtGui import QColor, QFont, QAction                             # n
 from PySide6.QtWidgets import (                                              # noqa: E402
     QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QGridLayout,
     QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox,
-    QPlainTextEdit, QPushButton, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QPlainTextEdit, QPushButton, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 import pyqtgraph as pg                                                       # noqa: E402
 
@@ -24,6 +24,7 @@ from .recorder import SessionRecorder, load_session, write_summary          # no
 from .serial_link import SIMULATOR, SerialLink, list_ports                  # noqa: E402
 
 ACCENT = "#2a9bb3"
+BAR = "#d9a441"
 CONTEXT = "#4a5666"
 LIMIT = "#e2574c"
 STATUS_STYLE = {
@@ -146,6 +147,25 @@ class MainWindow(QMainWindow):
         g.addWidget(self.calzero_btn, 4, 0); g.addWidget(self.calref_btn, 4, 1)
         g.addWidget(self.calclear_btn, 5, 0, 1, 2)
         ll.addWidget(dev)
+
+        sim = QGroupBox("Simulation mode (no hardware)")
+        sg = QGridLayout(sim)
+        self.sim_switch_btn = QPushButton("Connect to the simulator")
+        self.sim_cycles = QSpinBox(); self.sim_cycles.setRange(1, 100000); self.sim_cycles.setValue(100)
+        self.sim_cycles.setSuffix(" cycles")
+        self.sim_period = QDoubleSpinBox(); self.sim_period.setRange(0.05, 30); self.sim_period.setDecimals(2)
+        self.sim_period.setSingleStep(0.25); self.sim_period.setValue(1.0); self.sim_period.setSuffix(" s per cycle")
+        self.sim_run_btn = QPushButton("Run simulation"); self.sim_run_btn.setObjectName("primary")
+        self.sim_stop_btn = QPushButton("Stop")
+        self.sim_lbl = QLabel("Uses the built-in simulated kit: plug/unplug cycles with an assumed wear model.")
+        self.sim_lbl.setWordWrap(True)
+        sg.addWidget(self.sim_switch_btn, 0, 0, 1, 2)
+        sg.addWidget(QLabel("Run"), 1, 0); sg.addWidget(self.sim_cycles, 1, 1)
+        sg.addWidget(QLabel("Cycle time"), 2, 0); sg.addWidget(self.sim_period, 2, 1)
+        sg.addWidget(self.sim_run_btn, 3, 0); sg.addWidget(self.sim_stop_btn, 3, 1)
+        sg.addWidget(self.sim_lbl, 4, 0, 1, 2)
+        ll.addWidget(sim)
+        self.sim_target = 0
         ll.addStretch(1)
         self.device_controls = [self.scan_btn, self.measure_btn, self.auto_cb, self.gain_box, self.gain_btn,
                                 self.setcycle_btn, self.calzero_btn, self.calref_btn, self.calclear_btn]
@@ -175,7 +195,30 @@ class MainWindow(QMainWindow):
         self.limit_line = pg.InfiniteLine(angle=0, pen=pg.mkPen(LIMIT, width=1.5, style=Qt.PenStyle.DashLine),
                                           label="limit {value:.1f} mΩ", labelOpts={"color": LIMIT, "position": 0.95})
         self.plot.addItem(self.limit_line)
-        tl.addWidget(self.plot, 1)
+
+        self.avg_plot = pg.PlotWidget()
+        self.avg_plot.setLabel("left", "Average of per-cycle minimum", units="mΩ")
+        self.avg_plot.setLabel("bottom", "Pin")
+        self.avg_plot.showGrid(x=False, y=True, alpha=0.15)
+        self.avg_plot.setMouseEnabled(x=False, y=False)
+        self.avg_plot.getAxis("bottom").setTicks([[(i, str(i)) for i in range(1, NPINS + 1)]])
+        self.avg_plot.setXRange(0.4, NPINS + 0.6, padding=0)
+        self.avg_bars = pg.BarGraphItem(x=list(range(1, NPINS + 1)), height=[0] * NPINS, width=0.65,
+                                        brush=BAR, pen=pg.mkPen(None))
+        self.avg_hi = pg.BarGraphItem(x=[1], height=[0], width=0.65, brush=BAR, pen=pg.mkPen("#e6ebf0", width=2))
+        self.avg_plot.addItem(self.avg_bars); self.avg_plot.addItem(self.avg_hi)
+        self.avg_hi_txt = pg.TextItem(color="#e6ebf0", anchor=(0.5, 1.2))
+        self.avg_lo_txt = pg.TextItem(color="#e6ebf0", anchor=(0.5, 1.2))
+        self.avg_plot.addItem(self.avg_hi_txt); self.avg_plot.addItem(self.avg_lo_txt)
+        self.avg_note = QLabel("Each cycle keeps the lowest of 8 readings per pin; a bar is the average of those minimums.")
+        self.avg_note.setWordWrap(True)
+        avg_tab = QWidget(); al = QVBoxLayout(avg_tab); al.setContentsMargins(0, 0, 0, 0)
+        al.addWidget(self.avg_plot, 1); al.addWidget(self.avg_note)
+
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self.plot, "R vs cycle")
+        self.tabs.addTab(avg_tab, "Average minimum R per pin")
+        tl.addWidget(self.tabs, 1)
         right.addWidget(top)
 
         self.table = QTableWidget(NPINS, len(COLS))
@@ -235,6 +278,9 @@ class MainWindow(QMainWindow):
         self.limit_sb.valueChanged.connect(self.rules_changed)
         self.consec_sb.valueChanged.connect(self.rules_changed)
         self.table.itemSelectionChanged.connect(self.pin_selected)
+        self.sim_switch_btn.clicked.connect(self.use_simulator)
+        self.sim_run_btn.clicked.connect(self.run_simulation)
+        self.sim_stop_btn.clicked.connect(lambda: self.send("SIMSTOP"))
         self.cmd_ed.returnPressed.connect(self.send_typed)
         self.send_btn.clicked.connect(self.send_typed)
 
@@ -262,6 +308,10 @@ class MainWindow(QMainWindow):
 
     def on_opened(self, port: str) -> None:
         self._set_connected(True)
+        if port == SIMULATOR:
+            self.link.send("AUTO 0")            # simulation mode: cycles only run when you press Run simulation
+            self.auto_cb.blockSignals(True); self.auto_cb.setChecked(False); self.auto_cb.blockSignals(False)
+            self.sim_lbl.setText("Simulator connected. Set the cycles and cycle time, then press Run simulation.")
         self.device_lbl.setText(f"Connected to {port}, waiting for the kit…")
         self.log(f"--- connected to {port}")
 
@@ -283,6 +333,10 @@ class MainWindow(QMainWindow):
         self.refresh_btn.setEnabled(not on)
         for w in self.device_controls + [self.cmd_ed, self.send_btn]:
             w.setEnabled(on)
+        sim_on = on and self.link.port_name == SIMULATOR
+        for w in (self.sim_cycles, self.sim_period, self.sim_run_btn, self.sim_stop_btn):
+            w.setEnabled(sim_on)
+        self.sim_switch_btn.setEnabled(not sim_on)
 
     def send(self, cmd: str) -> None:
         if not self.link.is_open:
@@ -311,6 +365,8 @@ class MainWindow(QMainWindow):
         elif isinstance(msg, CycleStart):
             self.trigger = msg.trigger
             self.device_cycle = msg.cycle
+            if self.sim_target and self.link.port_name == SIMULATOR and not self.sim_run_btn.isEnabled():
+                self.sim_lbl.setText(f"Running: cycle {msg.cycle}  (target {self.sim_start + self.sim_target})")
         elif isinstance(msg, Zero):
             if not 4.5 < msg.v5 < 5.5:
                 self.statusBar().showMessage(f"Warning: 5 V rail reads {msg.v5:.2f} V. Check the power supply.", 8000)
@@ -329,6 +385,11 @@ class MainWindow(QMainWindow):
         elif isinstance(msg, Error):
             self.statusBar().showMessage(f"Kit refused a command: {msg.text}", 8000)
         elif isinstance(msg, Ack):
+            if msg.command == "SIMRUN":
+                self.sim_lbl.setText(f"Running {self.sim_target} cycles…")
+            elif msg.command in ("SIMDONE", "SIMSTOP"):
+                self.sim_lbl.setText(f"Simulation {'finished' if msg.command == 'SIMDONE' else 'stopped'} at cycle {self.device_cycle}.")
+                self.sim_run_btn.setEnabled(True)
             if msg.command in ("CALZERO", "CALREF", "CALCLEAR"):
                 self.statusBar().showMessage(f"{msg.command} done. Calibration is saved in the kit.", 8000)
         elif isinstance(msg, Info):
@@ -381,6 +442,10 @@ class MainWindow(QMainWindow):
         except OSError as e:
             QMessageBox.warning(self, "Can't use that folder", str(e))
             return
+        if self.link.is_open and self.device_cycle and self._confirm(
+                f"The kit's cycle counter is at {self.device_cycle}. Reset it to 0 for this new sample?"):
+            self.send("SETCYCLE 0")
+            self.device_cycle = 0
         safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", sample).strip("_") or "sample"
         path = os.path.join(folder, f"{safe}_{datetime.now():%Y%m%d_%H%M%S}.csv")
         self.tracker.reset(); self.announced_fail.clear()
@@ -389,9 +454,6 @@ class MainWindow(QMainWindow):
         self.rec_btn.setText("Stop recording")
         self.rec_lbl.setText(f"Recording to {path}")
         self._refresh_all()
-        if self.link.is_open and self.device_cycle and self._confirm(
-                f"The kit's cycle counter is at {self.device_cycle}. Reset it to 0 for this new sample?"):
-            self.send("SETCYCLE 0")
 
     def resume_session(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Resume a session", self.folder_ed.text(), "CSV files (*.csv)")
@@ -439,6 +501,26 @@ class MainWindow(QMainWindow):
         self.settings.setValue("limit", self.tracker.limit)
         self.settings.setValue("consecutive", self.tracker.consecutive)
         self._refresh_all()
+
+    # ------------------------------------------------------------------ simulation mode
+    def use_simulator(self) -> None:
+        if self.link.is_open:
+            self.link.close()
+        i = self.port_box.findData(SIMULATOR)
+        if i >= 0:
+            self.port_box.setCurrentIndex(i)
+        self.toggle_connection()
+
+    def run_simulation(self) -> None:
+        n = self.sim_cycles.value()
+        ms = int(round(self.sim_period.value() * 1000))
+        self.sim_target, self.sim_start = n, self.device_cycle or 0
+        self.send("AUTO 0")
+        self.send(f"SIMRUN {n} {ms}")
+        self.sim_run_btn.setEnabled(False)
+        self.sim_lbl.setText(f"Starting {n} cycles at {ms / 1000:.2f} s each…")
+        if not self.recorder.active:
+            self.statusBar().showMessage("Tip: press Start recording first to save the simulated readings to CSV.", 8000)
 
     # ------------------------------------------------------------------ kit commands with prompts
     def set_cycle(self) -> None:
@@ -500,7 +582,27 @@ class MainWindow(QMainWindow):
                 self.curves[p].setData(st.cycles, st.values)
         st = self.tracker.pins[self.selected_pin]
         self.sel_curve.setData(st.cycles, st.values)
+        self._refresh_avg_chart()
         self.limit_line.setValue(self.tracker.limit)
+
+    def _refresh_avg_chart(self) -> None:
+        avg = [self.tracker.pins[p].avg_min for p in range(1, NPINS + 1)]
+        valid = [(v, p) for p, v in enumerate(avg, 1) if not math.isnan(v)]
+        heights = [0 if math.isnan(v) else v for v in avg]
+        self.avg_bars.setOpts(height=heights)
+        if not valid:
+            self.avg_hi.setOpts(x=[1], height=[0]); self.avg_hi_txt.setText(""); self.avg_lo_txt.setText("")
+            self.avg_note.setText("No cycles yet. Each cycle keeps the lowest of 8 readings per pin; "
+                                  "a bar is the average of those minimums.")
+            return
+        (vh, ph), (vl, pl) = max(valid), min(valid)
+        self.avg_hi.setOpts(x=[ph], height=[vh])
+        self.avg_hi_txt.setText(f"{vh:.2f}"); self.avg_hi_txt.setPos(ph, vh)
+        self.avg_lo_txt.setText(f"{vl:.2f}"); self.avg_lo_txt.setPos(pl, vl)
+        self.avg_plot.setYRange(0, max(1.0, vh * 1.2), padding=0)
+        n = len(self.tracker.pins[ph].mins)
+        self.avg_note.setText(f"Over {n} cycles · highest: pin {ph}, {vh:.3f} mΩ (outlined) · lowest: pin {pl}, "
+                              f"{vl:.3f} mΩ · spread {vh - vl:.3f} mΩ. Each cycle keeps the lowest of 8 readings per pin.")
 
     def _refresh_tiles(self) -> None:
         t = self.tracker
@@ -556,5 +658,10 @@ QFrame#tile { background: #1c2530; border-radius: 6px; }
 QLabel#tileValue { font-size: 15pt; font-family: Consolas, 'IBM Plex Mono', monospace; background: transparent; }
 QLabel#tileCaption { color: #8d9aa8; font-size: 9pt; background: transparent; }
 QSplitter::handle { background: #11161d; }
+QTabWidget::pane { border: 1px solid #2a3542; border-radius: 4px; top: -1px; }
+QTabBar::tab { background: #1c2530; color: #8d9aa8; border: 1px solid #2a3542; border-bottom: 0;
+  border-top-left-radius: 5px; border-top-right-radius: 5px; padding: 6px 14px; margin-right: 2px; }
+QTabBar::tab:selected { background: #151c24; color: #e6ebf0; border-color: #2a9bb3; }
+QTabBar::tab:hover { color: #e6ebf0; }
 QStatusBar { color: #e0a03a; }
 """

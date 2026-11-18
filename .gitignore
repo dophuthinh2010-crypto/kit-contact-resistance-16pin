@@ -7,3 +7,5 @@ fp-info-cache
 build/
 dist/
 *.spec
+install_log.txt
+app_error_log.txt

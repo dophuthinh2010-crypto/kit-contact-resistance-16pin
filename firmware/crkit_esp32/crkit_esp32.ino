@@ -15,7 +15,7 @@
 #include <Adafruit_ADS1X15.h>
 #include <Preferences.h>
 
-#define FW_VERSION "0.1.0"
+#define FW_VERSION "0.2.0"
 
 // ---------------- pin map (docs/design.md) ----------------
 const int PIN_SR_DATA  = 23;   // 74HC595 SER
@@ -96,7 +96,7 @@ void sayHello() {
 }
 
 // ---------------- one pin ----------------
-struct Reading { float i, vmv, rraw, r; const char* flag; };
+struct Reading { float i, vmv, rraw, r, rmin; const char* flag; };
 
 Reading measurePin(int p, float v0, float v5) {
   Reading rd;
@@ -105,21 +105,25 @@ Reading measurePin(int p, float v0, float v5) {
   delay(1);
   digitalWrite(PIN_I_EN, HIGH);                // current pulse starts (about 25 ms)
   delay(SETTLE_MS);
-  float va = 0, vi = 0;
+  float va = 0, vi = 0, rminRaw = INFINITY;
+  float sens = ACS_SENS_5V * (v5 / 5.0f);      // ACS712 is ratiometric to its supply
   for (int s = 0; s < SAMPLES_PIN; s++) {      // interleave so both see the same moment
-    va += ads.computeVolts(ads.readADC_SingleEnded(0));
-    vi += ads.computeVolts(ads.readADC_SingleEnded(1));
+    float vas = ads.computeVolts(ads.readADC_SingleEnded(0));
+    float vis = ads.computeVolts(ads.readADC_SingleEnded(1));
+    va += vas; vi += vis;
+    float is = (vas - v0) / sens;              // this sample's own R, to find the lowest of the 8
+    if (is > 0.001f) { float rs = (vis / inaGain) / is * 1000.0f; if (rs < rminRaw) rminRaw = rs; }
   }
   digitalWrite(PIN_I_EN, LOW);                 // current pulse ends
   shiftPins(0);
   va /= SAMPLES_PIN; vi /= SAMPLES_PIN;
 
-  float sens = ACS_SENS_5V * (v5 / 5.0f);      // ACS712 is ratiometric to its supply
   rd.i   = (va - v0) / sens;
   float vc = vi / inaGain;                     // contact voltage, V
   rd.vmv = vc * 1000.0f;
   rd.rraw = (rd.i > 0.001f) ? vc / rd.i * 1000.0f : NAN;   // mOhm
   rd.r   = (rd.rraw - zeroOffset[p]) * gainCorr;
+  rd.rmin = isinf(rminRaw) ? NAN : (rminRaw - zeroOffset[p]) * gainCorr;
 
   if (rd.i < I_OPEN_LIMIT)      rd.flag = "OPEN";
   else if (vi >= INA_RAIL_HI)   rd.flag = "OVER";
@@ -145,7 +149,7 @@ void runScan(const char* trigger, bool countIt, float* raw = nullptr, int onlyPi
     if (onlyPin >= 0 && p != onlyPin) continue;
     Reading rd = measurePin(p, v0, v5);
     if (raw) raw[p] = rd.rraw;
-    Serial.printf("DATA,%ld,%d,%.4f,%.4f,%.4f,%s\n", cycleCount, p + 1, rd.i, rd.vmv, rd.r, rd.flag);
+    Serial.printf("DATA,%ld,%d,%.4f,%.4f,%.4f,%s,%.4f\n", cycleCount, p + 1, rd.i, rd.vmv, rd.r, rd.flag, rd.rmin);
   }
   allOff();
   digitalWrite(PIN_MUX_EN, HIGH);
