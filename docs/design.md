@@ -1,0 +1,88 @@
+# Design summary
+
+The full design (with the BOM and block diagram) lives in the Claude doc:
+https://claude.ai/artifact/T8kFqe1HFXj3PjpiL8ypHh. This file copies the key decisions for review.
+
+## Measurement path
+
+```
++5V -> Q_EN (AO3401A) -> R_HI 5.6 Ω 5 W -> ACS712-05B -> F_BUS (all female force lines)
+    -> female pin n -> CONTACT n -> male pin n -> Qn (AO3400A) -> LO_RTN -> R_LO 2.2 Ω 5 W -> GND
+
+Sense: female pad n -> U4 CD74HC4067 -> INA333 IN+
+       male pad n   -> U5 CD74HC4067 -> INA333 IN-   (G = 1 + 100k/RG = 101)
+       INA333 out -> ADS1115 AIN1;  ACS712 out -> AIN0;  +5V/2 -> AIN2
+```
+
+Test current ≈ 5 V / (5.6 + 2.2 + 0.3 Ω) ≈ 0.62 A, pulsed about 30 ms per pin.
+
+```
+R_n = (V_CONTACT / G) / I,   I = (V_ACS - V_ACS0) / (0.185 * V_5V / 5)
+```
+
+## Schematic blocks
+
+1. **Power:** J1 5 V 2 A barrel → F1 2 A polyfuse → D1 SMBJ5.0A → 470 µF → `+5V`.
+   U7 AP2112K-3.3 → `+3V3A` (muxes, INA333, ADS1115, 74HC595).
+2. **Current source:** Q_EN P-MOSFET switched by Q_DRV 2N7002 from `I_EN`. R_HI → ACS712 IP+ → IP− = `F_BUS`.
+3. **Pin select:** Q1–Q16 AO3400A, drain = male force line n, source = `LO_RTN`. Gates are driven by
+   2 × 74HC595 (100 Ω series, 100 kΩ pulldown). /OE has a pull-up, so all switches are off at boot. R_LO lifts the contact to about 1.4 V.
+4. **Sense muxes:** U4 (female) / U5 (male) CD74HC4067, shared S0–S3 and /E. 1 kΩ + BAT54S clamp on each input.
+5. **Amplifier:** INA333, RG = 1.00 kΩ (G = 101, about 51 mΩ full scale) or 10.0 kΩ (G = 11, about 470 mΩ) via JP1.
+   100 pF per input, 10 nF across the inputs, 1 kΩ/100 nF output filter.
+6. **ADC:** ADS1115 at 0x48. AIN0 = I_SENSE, AIN1 = V_CONTACT, AIN2 = +5V/2, AIN3 spare.
+7. **I/O:** J4 mate-detect switch (cycle counter), LED, J5 I²C spare, test points.
+
+## ESP32 pin map (DevKitC V4, WROOM-32E)
+
+| GPIO | Net | Function |
+| --- | --- | --- |
+| 23 | SR_DATA | 74HC595 SER |
+| 18 | SR_CLK | 74HC595 SRCLK |
+| 5 | SR_LATCH | 74HC595 RCLK |
+| 19 | SR_OE | 74HC595 /OE (pull-up) |
+| 25, 26, 27, 14 | MUX_S0..S3 | 4067 select |
+| 13 | MUX_EN | 4067 /E (pull-up) |
+| 32 | I_EN | test current on |
+| 21 / 22 | SDA / SCL | ADS1115, J5 |
+| 4 | ADC_RDY | ADS1115 ALERT/RDY |
+| 33 | MATE_DET | mate-detect switch |
+| 17 | LED | status LED |
+
+## IDC 34-way pinout (J2 female, J3 male, same on each breakout)
+
+Odd pin 2n−1 = force n, even pin 2n = sense n (n = 1..16). Pins 33 and 34 = GND.
+
+## Connector (RP16-T plug / RS16P-T socket)
+
+- 2 rows × 8 contacts, 4.70 mm pitch, rows 9.14 mm apart, Ø1.57 mm holes (2.6 mm pads).
+- 2 × Ø3.30 mm fixing holes on the row centreline, 53.97 mm apart.
+- Seen from the mating face (board top): plug 1–8 top row, 9–16 bottom; socket 9–16 top, 1–8 bottom.
+- The plate sits 7.1 mm (plug) / 7.9 mm (socket) above the PCB, so it needs M3 standoffs.
+- Ratings: 5 A all contacts, 5 mΩ max initially / 10 mΩ after conditioning, 500 operations,
+  0.8–2.3 N per contact pair.
+
+## Layout rules
+
+- Main board: 2-layer, 2 oz, solid GND bottom. Zones: power (left), switching (centre), analog + MCU (right).
+- Force paths ≥ 1.0 mm. `F_BUS` and `LO_RTN` are pours. R_LO return goes to the J1 star ground.
+- Sense lines 0.25 mm over unbroken GND. SENSE_F/SENSE_M run as a tight, equal-length pair under 20 mm.
+- Breakouts: force trace (1.0 mm) and sense trace (0.25 mm) leave each pad on opposite sides.
+
+## Firmware scan (per mating)
+
+1. Wait for MATE_DET + 200 ms, then add 1 to the cycle counter.
+2. Read the ACS712 zero with all switches off.
+3. For each pin: select the mux, turn on Qn, set I_EN high, wait 5 ms, read AIN0/AIN1 (8 samples each), switch off.
+4. Send CSV `cycle, pin, I_A, V_mV, R_mOhm`. Flag a pin if R > 10 mΩ, or if I < 0.3 A (open).
+
+Calibration: 10 mΩ 4-terminal shunt (gain), shorted bar (zero per channel), DMM (current).
+
+## Open items
+
+- [ ] Test current: keep 0.62 A, or a 100 mA dry-circuit test (EIA-364-23)?
+- [ ] Failure limit (proposed R > 10 mΩ, keep cycling past 500)
+- [ ] Cycle method: manual or actuator
+- [ ] Logging: USB serial, or Wi-Fi/SD
+- [ ] Current accuracy: ACS712 gives about ±2–3% after averaging; a shunt on AIN3 is an option
+- [ ] Verify the footprint against a real RP16-T / RS16P-T sample before ordering PCBs
