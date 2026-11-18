@@ -32,6 +32,7 @@ linked by 34-way IDC ribbons (16 force + 16 sense + 2 GND).
 | `firmware/crkit_esp32/` | ESP32 firmware (Arduino): scan, mate detect, calibration |
 | `desktop-app/` | Desktop app (Python, PySide6): connect, record to CSV, live table and plot |
 | `docs/simulation/index.html` | 3D simulation: plug/unplug cycles, 16-pin scan through the ACS712 / INA333 / ADS1115 chain with noise, assumed wear model and life estimate |
+| `hardware/BOM.xlsx`, `hardware/BOM.csv` | Bill of materials for one kit: model, supplier, price, alternative part (shared sheet: https://claude.ai/artifact/EmcHuasxRLR5GvdHxSPXVu) |
 | `hardware/footprints/McMurdo_RedRange.pretty/` | KiCad footprints for RP16-T and RS16P-T |
 | `hardware/scripts/gen_mcmurdo_fp.py` | Script that generates those footprints |
 

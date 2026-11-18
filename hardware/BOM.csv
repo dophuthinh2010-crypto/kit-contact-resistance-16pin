@@ -1,0 +1,42 @@
+﻿Group,Ref,Part / function,Model (manufacturer part no.),Qty,Unit price,Line total,Supplier,Alternative part,Price basis,Notes
+Device under test,J_JACK (male),"Rack & panel plug, 16 way, PC tail",ITW McMurdo RP16-T,1,20,20,Farnell / element14,"DRP116-T (same plug, DAP body); RPD16 if you need guide dowels",Quoted,Price is for the RP16 solder version ($19.73–21.25). element14 shows RP16 as 'No longer stocked': check availability first.
+Device under test,J_JACK (female),"Rack & panel socket, 16 way, PC tail",ITW McMurdo RS16P-T,1,20,20,Farnell / element14,DRS116P-T (DAP body); RSD16 for guide dowels,Estimate,Assumed similar to the plug. RS16 also shows 'No longer stocked' at element14.
+Main board,MCU,ESP32 development board,Espressif ESP32-DevKitC-32E,1,10,10,DigiKey 1965-ESP32-DEVKITC-32E-ND,ESP32-DevKitC-VE (WROVER); local ESP32 DevKit with CP2102,Quoted,Micro-USB: needs a USB-C to Micro-USB data cable. Power it from USB only.
+Main board,U1,"Hall current sensor, 5 A",Allegro ACS712ELCTR-05B-T,1,1.1,1.1,LCSC C44471,Allegro ACS723LLCTR-05AB-T,Quoted,"One LCSC listing flags ACS712 'not recommended for new designs'. ACS723: same SOIC-8 pinout except pin 6 (bandwidth select), 400 mV/A, so change the firmware constant."
+Main board,U6,Zero-drift instrumentation amplifier,TI INA333AIDGKR,1,1.19,1.19,LCSC C19450,Analog Devices AD8237ARMZ,Quoted,Gain set by RG (JP1).
+Main board,U8,"16-bit ADC, 4 ch, I2C",TI ADS1115IDGSR,1,1.33,1.33,LCSC C37593,ADS1115 breakout module (for a hand-wired prototype),Quoted,LCSC showed 0 stock on one listing; DigiKey ~$3.59.
+Main board,"U4, U5",16-channel analog mux,TI CD74HC4067M96,2,0.7,1.4,LCSC,CD74HC4067SM96 (SSOP-24),Estimate,"Sense lines only, no test current through it."
+Main board,"U2, U3",8-bit shift register,TI SN74HC595DR,2,0.2,0.4,LCSC,Nexperia 74HC595D,Estimate,
+Main board,U7,"3.3 V LDO, 600 mA",Diodes AP2112K-3.3TRG1,1,0.1,0.1,LCSC,AMS1117-3.3 (SOT-223),Estimate,Analog 3.3 V rail.
+Main board,Q1–Q16,"N-MOSFET, logic level, SOT-23",AOS AO3400A,16,0.03,0.48,LCSC,Vishay Si2302CDS,Estimate,One per contact (pin select).
+Main board,Q_EN,"P-MOSFET, SOT-23",AOS AO3401A,1,0.03,0.03,LCSC,Vishay Si2301CDS,Estimate,Test current enable.
+Main board,Q_DRV,N-MOSFET small signal,2N7002,1,0.02,0.02,LCSC,BSS138,Estimate,
+Main board,R_HI,"Wirewound resistor 5.6 Ω, 5 W",Yageo SQP500JB-5R6,1,0.3,0.3,LCSC,"Any 5 W cement resistor, 5.6 Ω",Estimate,Sets the 0.62 A test current. Mount raised off the board.
+Main board,R_LO,"Wirewound resistor 2.2 Ω, 5 W",Yageo SQP500JB-2R2,1,0.3,0.3,LCSC,"Any 5 W cement resistor, 2.2 Ω",Estimate,
+Main board,"RG1, RG2","Thin-film resistor 0.1 %, 0603 (1.00 kΩ and 10.0 kΩ)",Yageo RT0603BRD071KL / RT0603BRD0710KL,2,0.1,0.2,LCSC,Panasonic ERA-3AEB102V / ERA-3AEB103V,Estimate,INA333 gain 101 / 11.
+Main board,R (misc),"Thick-film resistors 1 %, 0603: 100 Ω ×17, 100 kΩ ×17, 1 kΩ ×35, 10 kΩ ×7, 4.7 kΩ ×2",UNI-ROYAL 0603WAF series,78,0.003,0.234,LCSC,Yageo RC0603FR series,Estimate,
+Main board,D_clamp,"Dual Schottky clamp, SOT-23",Nexperia BAT54S,32,0.02,0.64,LCSC,BAT54SW (SOT-323),Estimate,Protects mux inputs.
+Main board,D1,TVS diode 5 V,Littelfuse SMBJ5.0A,1,0.05,0.05,LCSC,SMAJ5.0A,Estimate,
+Main board,F1,"Polyfuse 2 A hold, 1812",Bourns MF-MSMF200-2,1,0.15,0.15,LCSC,Littelfuse 1812L200,Estimate,
+Main board,C1,Electrolytic 470 µF 10 V,Panasonic EEU-FR1A471,1,0.15,0.15,LCSC,Any low-ESR 470 µF 16 V,Estimate,
+Main board,C (misc),"Ceramic caps: 100 nF ×12, 10 µF ×2, 1 µF ×2, 10 nF, 1 nF, 100 pF C0G ×2",Samsung CL series,20,0.01,0.2,LCSC,Murata GRM series,Estimate,
+Main board,LED1,LED green 0805,Generic,1,0.02,0.02,LCSC,,Estimate,
+Main board,J1,DC barrel jack 5.5/2.1 mm,CUI PJ-002A,1,0.6,0.6,LCSC / DigiKey,Generic DC-005,Estimate,
+Main board,"J2, J3","Box header 2×17, 2.54 mm",Amphenol T821134A1S100CEU,2,0.3,0.6,LCSC,Generic 34-pin IDC box header,Estimate,Ribbon to the jack boards.
+Main board,J4,JST XH 2-pin header,JST B2B-XH-A,1,0.05,0.05,LCSC,Generic XH 2.54,Estimate,Mate-detect switch.
+Main board,"J5, JP1",Pin headers 1×4 and 1×3 + jumper,Generic 2.54 mm,1,0.05,0.05,LCSC,,Estimate,
+Main board,MCU socket,"Female header 1×19, 2.54 mm",Generic,2,0.15,0.3,LCSC,,Estimate,Lets the ESP32 board plug in.
+Jack boards,J_IDC,"Box header 2×17, 2.54 mm",Amphenol T821134A1S100CEU,2,0.3,0.6,LCSC,Generic 34-pin IDC box header,Estimate,One per jack board.
+Jack boards,Standoffs,"M3 brass standoff, 7 mm (plug) and 8 mm (socket)",Generic M3,4,0.1,0.4,LCSC / local,,Estimate,Plates sit 7.1 / 7.9 mm above the board: shim with a washer.
+Cables & power,"W1, W2","34-way IDC ribbon, 30 cm, with 2 IDC sockets",3M 3365/34 + 3M 89134 sockets,2,1.5,3.0,LCSC / DigiKey,Generic 34P ribbon assembly,Estimate,
+Cables & power,PSU,"5 V 2 A adapter, 5.5/2.1 mm plug",Mean Well GST18A05-P1J,1,8,8,DigiKey / Mouser,Generic 5 V 2 A adapter (~$3),Estimate,
+Cables & power,USB,"USB-C to Micro-USB data cable, 1 m",Generic,1,2,2,Local,,Estimate,"Must carry data, not charge-only."
+PCBs,PCB-1,"Main board 100×80 mm, 2-layer, 2 oz (lot of 5)",JLCPCB,1,15,15,JLCPCB,PCBWay,Estimate,Shipping not included.
+PCBs,"PCB-2, PCB-3","Jack boards 80×40 mm, 2-layer, 1 oz (lot of 5 each)",JLCPCB,2,2,4,JLCPCB,PCBWay,Estimate,Two designs (plug and socket footprints).
+Fixture,RAIL,"Linear rail MGN12H, 150 mm, with carriage",HIWIN MGN12H,1,15,15,AliExpress / local,Genuine HIWIN (~$60),Estimate,Price for a generic rail.
+Fixture,MECH,"Base plate, female-board bracket, carriage clamp (aluminium)",Custom machined,1,30,30,Local machine shop,3D-printed brackets on an aluminium plate,Estimate,
+Fixture,SW,"Mate-detect microswitch, lever",Omron D2F-01L,1,1.5,1.5,DigiKey / LCSC,KW11-3Z generic,Estimate,
+Fixture,HW,"Handle knob, M3/M4 screws, rubber feet",Generic,1,5,5,Local,,Estimate,
+Calibration,SHUNT,"Reference shunt 10 mΩ, 4-terminal (Kelvin), 1 %",Vishay WSK2512R0100FEA,1,2,2,DigiKey / Mouser,Bourns CSS2H-2512K-10L0F,Estimate,For 'Calibrate with shunt'.
+Calibration,SHORT,"Shorting bar (copper), force and sense shorted",Made in-house,1,2,2,Local,,Estimate,For 'Calibrate zero'.
+TOTAL per kit (USD),,,,,,148.39,,,,"Unit price at qty 1, USD, excl. tax and shipping. 'Quoted' = distributor price seen 18 Nov 2026; 'Estimate' = typical price, check before ordering."
