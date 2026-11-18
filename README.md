@@ -5,7 +5,7 @@ ITW McMurdo Red Range 16-way connector (RP16-T plug / RS16P-T socket) after
 every plug/unplug cycle. The data is used to estimate connector life
 (datasheet: 5 mΩ max initially, 10 mΩ max after conditioning, 500 mechanical operations).
 
-**Status:** design stage, for review. Schematic and PCB layout not yet drawn in KiCad.
+**Status:** design stage, for review. Firmware and desktop app written (app core tested; firmware and GUI not yet run on hardware). Schematic and PCB layout not yet drawn in KiCad.
 
 ## How it works
 
@@ -23,10 +23,14 @@ linked by 34-way IDC ribbons (16 force + 16 sense + 2 GND).
 
 | Path | Contents |
 | --- | --- |
+| `docs/INSTALL.md` | **Start here:** installing the USB driver, the desktop app and the firmware, then running a test |
 | `docs/design.md` | Design summary: schematic blocks, pin map, connector pinouts, layout rules, open items |
 | `docs/concept_sketch.jpg` | Original concept sketch |
 | `docs/footprint_preview.png` | Preview of the connector footprints |
 | `docs/3d-model/index.html` | Interactive 3D model of the kit (open in a browser; loads three.js from a CDN) |
+| `docs/serial-protocol.md` | Serial protocol between the ESP32 and the laptop |
+| `firmware/crkit_esp32/` | ESP32 firmware (Arduino): scan, mate detect, calibration |
+| `desktop-app/` | Desktop app (Python, PySide6): connect, record to CSV, live table and plot |
 | `docs/simulation/index.html` | 3D simulation: plug/unplug cycles, 16-pin scan through the ACS712 / INA333 / ADS1115 chain with noise, assumed wear model and life estimate |
 | `hardware/footprints/McMurdo_RedRange.pretty/` | KiCad footprints for RP16-T and RS16P-T |
 | `hardware/scripts/gen_mcmurdo_fp.py` | Script that generates those footprints |
@@ -51,4 +55,6 @@ KiCad → Preferences → Manage Footprint Libraries → add
 - [ ] Draw the schematic in KiCad
 - [ ] Lay out the jack breakout boards (connector + IDC + force/sense traces)
 - [ ] Lay out the main board
-- [ ] Firmware: scan loop, calibration, CSV logging
+- [x] Firmware: scan loop, calibration, serial protocol
+- [x] Desktop app: recording, live view, resume, summary
+- [ ] Test firmware and app on the real kit

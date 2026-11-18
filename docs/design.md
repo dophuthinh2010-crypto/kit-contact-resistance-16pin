@@ -24,6 +24,8 @@ R_n = (V_CONTACT / G) / I,   I = (V_ACS - V_ACS0) / (0.185 * V_5V / 5)
 
 1. **Power:** J1 5 V 2 A barrel → F1 2 A polyfuse → D1 SMBJ5.0A → 470 µF → `+5V`.
    U7 AP2112K-3.3 → `+3V3A` (muxes, INA333, ADS1115, 74HC595).
+   The ESP32-DevKitC is powered from the laptop USB only: its 5V header pin is **not** connected to `+5V`
+   (Espressif: power the DevKitC from exactly one source). Only GND is shared between the DevKitC and the main board.
 2. **Current source:** Q_EN P-MOSFET switched by Q_DRV 2N7002 from `I_EN`. R_HI → ACS712 IP+ → IP− = `F_BUS`.
 3. **Pin select:** Q1–Q16 AO3400A, drain = male force line n, source = `LO_RTN`. Gates are driven by
    2 × 74HC595 (100 Ω series, 100 kΩ pulldown). /OE has a pull-up, so all switches are off at boot. R_LO lifts the contact to about 1.4 V.
