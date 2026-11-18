@@ -19,7 +19,8 @@ import pyqtgraph as pg                                                       # n
 
 from . import __version__                                                    # noqa: E402
 from .analysis import Tracker                                                # noqa: E402
-from .protocol import NPINS, Ack, CycleEnd, CycleStart, Data, Error, Hello, Info, Zero, parse_line  # noqa: E402
+from .protocol import NPINS, Ack, Alarm, CycleEnd, CycleStart, Data, Error, Hello, Info, IsoDone, Short, Zero, parse_line  # noqa: E402
+from .issues import IssueLog  # noqa: E402
 from .recorder import SessionRecorder, load_session, write_summary          # noqa: E402
 from .serial_link import SIMULATOR, SerialLink, list_ports                  # noqa: E402
 
@@ -32,9 +33,19 @@ STATUS_STYLE = {
     "wear": ("WEAR", "#e0a03a"),
     "open": ("OPEN", "#e0a03a"),
     "fail": ("FAIL", "#e2574c"),
+    "short": ("SHORT", "#e2574c"),
     "none": ("–", "#8d9aa8"),
 }
-COLS = ["Pin", "Latest (mΩ)", "First (mΩ)", "Change (mΩ)", "Max (mΩ)", "Status", "Failed at cycle"]
+SEVERITY_COLOR = {"critical": "#e2574c", "warning": "#e0a03a", "info": "#8d9aa8"}
+SCENARIOS = [
+    ("No fault", ["FAULT CLEAR"]),
+    ("1 pin open (pin 5)", ["FAULT CLEAR", "FAULT OPEN 5"]),
+    ("3 pins open (2, 9, 14)", ["FAULT CLEAR", "FAULT OPEN 2,9,14"]),
+    ("2 pins shorted (4-5)", ["FAULT CLEAR", "FAULT SHORT 4-5"]),
+    ("3 pins shorted (10-11-12)", ["FAULT CLEAR", "FAULT SHORT 10-11-12"]),
+    ("Custom (type below)", None),
+]
+COLS = ["Pin", "Latest (mΩ)", "First (mΩ)", "Change (mΩ)", "Max (mΩ)", "Status", "Failed at cycle / note"]
 
 
 def fmt(v: float, d: int = 3) -> str:
@@ -69,6 +80,8 @@ class MainWindow(QMainWindow):
         self.dirty = False
         self.announced_fail: set = set()
         self.device_cycle = None
+        self.issues = IssueLog(on_new=self._on_issue)
+        self._iso_pairs = {}
 
         self._build_ui()
         self._connect_signals()
@@ -163,7 +176,13 @@ class MainWindow(QMainWindow):
         sg.addWidget(QLabel("Run"), 1, 0); sg.addWidget(self.sim_cycles, 1, 1)
         sg.addWidget(QLabel("Cycle time"), 2, 0); sg.addWidget(self.sim_period, 2, 1)
         sg.addWidget(self.sim_run_btn, 3, 0); sg.addWidget(self.sim_stop_btn, 3, 1)
-        sg.addWidget(self.sim_lbl, 4, 0, 1, 2)
+        self.fault_box = QComboBox(); self.fault_box.addItems([n for n, _ in SCENARIOS])
+        self.fault_custom = QLineEdit(); self.fault_custom.setPlaceholderText("e.g.  open 3, 7; short 6-7-8")
+        self.fault_btn = QPushButton("Apply fault")
+        sg.addWidget(QLabel("Fault scenario"), 4, 0); sg.addWidget(self.fault_box, 4, 1)
+        sg.addWidget(self.fault_custom, 5, 0, 1, 2)
+        sg.addWidget(self.fault_btn, 6, 0, 1, 2)
+        sg.addWidget(self.sim_lbl, 7, 0, 1, 2)
         ll.addWidget(sim)
         self.sim_target = 0
         ll.addStretch(1)
@@ -247,8 +266,21 @@ class MainWindow(QMainWindow):
         self.cmd_ed = QLineEdit(); self.cmd_ed.setPlaceholderText("Type a command for the kit, e.g. STATUS, then press Enter")
         self.send_btn = QPushButton("Send")
         cmdrow.addWidget(self.cmd_ed, 1); cmdrow.addWidget(self.send_btn); cmdrow.addWidget(self.show_data_cb)
-        cl.addWidget(QLabel("Serial console")); cl.addWidget(self.console, 1); cl.addLayout(cmdrow)
-        right.addWidget(con)
+        cl.addWidget(self.console, 1); cl.addLayout(cmdrow)
+        self.issue_table = QTableWidget(0, 6)
+        self.issue_table.setHorizontalHeaderLabels(["Time", "Cycle", "Severity", "Type", "Pins", "Detail"])
+        self.issue_table.verticalHeader().setVisible(False)
+        self.issue_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.issue_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        hh = self.issue_table.horizontalHeader()
+        for c in range(5):
+            hh.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
+        hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        self.issue_table.setWordWrap(True)
+        self.bottom_tabs = QTabWidget()
+        self.bottom_tabs.addTab(con, "Serial console")
+        self.bottom_tabs.addTab(self.issue_table, "Issues (0)")
+        right.addWidget(self.bottom_tabs)
         right.setSizes([420, 300, 160])
         split.addWidget(right)
         split.setSizes([360, 1000])
@@ -281,6 +313,7 @@ class MainWindow(QMainWindow):
         self.sim_switch_btn.clicked.connect(self.use_simulator)
         self.sim_run_btn.clicked.connect(self.run_simulation)
         self.sim_stop_btn.clicked.connect(lambda: self.send("SIMSTOP"))
+        self.fault_btn.clicked.connect(self.apply_fault)
         self.cmd_ed.returnPressed.connect(self.send_typed)
         self.send_btn.clicked.connect(self.send_typed)
 
@@ -321,6 +354,7 @@ class MainWindow(QMainWindow):
         self.log(f"--- {reason or 'disconnected'}")
         if reason:
             self.statusBar().showMessage(reason, 10000)
+            self.issues.add(self.device_cycle or 0, "critical", "CONNECTION", "", reason)
         if reason and self.recorder.active:
             QMessageBox.warning(self, "Connection lost",
                                 f"{reason}\n\nRecording is still open. Reconnect to continue; "
@@ -334,7 +368,8 @@ class MainWindow(QMainWindow):
         for w in self.device_controls + [self.cmd_ed, self.send_btn]:
             w.setEnabled(on)
         sim_on = on and self.link.port_name == SIMULATOR
-        for w in (self.sim_cycles, self.sim_period, self.sim_run_btn, self.sim_stop_btn):
+        for w in (self.sim_cycles, self.sim_period, self.sim_run_btn, self.sim_stop_btn,
+                  self.fault_box, self.fault_custom, self.fault_btn):
             w.setEnabled(sim_on)
         self.sim_switch_btn.setEnabled(not sim_on)
 
@@ -372,9 +407,21 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage(f"Warning: 5 V rail reads {msg.v5:.2f} V. Check the power supply.", 8000)
         elif isinstance(msg, Data):
             self.tracker.add(msg)
+            self.issues.on_data(msg)
             if self.recorder.active:
                 self.recorder.write(msg, self.trigger)
             self.dirty = True
+        elif isinstance(msg, Short):
+            self._iso_pairs[(msg.pin_a, msg.pin_b)] = msg.microvolts
+        elif isinstance(msg, IsoDone):
+            self.tracker.end_isolation(msg.cycle, self._iso_pairs.keys())
+            self.issues.on_isolation(msg.cycle, dict(self._iso_pairs))
+            self._iso_pairs = {}
+            self.dirty = True
+        elif isinstance(msg, Alarm):
+            self.issues.on_alarm(msg)
+            QApplication.beep()
+            self.statusBar().showMessage(f"KIT ALARM {msg.code}: {msg.detail}", 20000)
         elif isinstance(msg, CycleEnd):
             if self.recorder.active:
                 self.recorder.flush()
@@ -400,9 +447,9 @@ class MainWindow(QMainWindow):
             if p not in self.announced_fail:
                 self.announced_fail.add(p)
                 st = self.tracker.pins[p]
+                self.issues.on_fail(p, st.fail_cycle, st.fail_reason)
                 QApplication.beep()
-                self.statusBar().showMessage(f"Pin {p} failed at cycle {st.fail_cycle} "
-                                             f"(above {self.tracker.limit:.1f} mΩ {self.tracker.consecutive}× in a row)", 15000)
+                self.statusBar().showMessage(f"Pin {p} failed at cycle {st.fail_cycle}: {st.fail_reason}", 15000)
 
     # ------------------------------------------------------------------ session
     def pick_folder(self) -> None:
@@ -426,6 +473,7 @@ class MainWindow(QMainWindow):
     def toggle_recording(self) -> None:
         if self.recorder.active:
             self.recorder.stop()
+            self.issues.stop_csv()
             self.rec_btn.setText("Start recording")
             self.rec_lbl.setText(f"Stopped. Saved {self.recorder.path}")
             return
@@ -449,7 +497,9 @@ class MainWindow(QMainWindow):
         safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", sample).strip("_") or "sample"
         path = os.path.join(folder, f"{safe}_{datetime.now():%Y%m%d_%H%M%S}.csv")
         self.tracker.reset(); self.announced_fail.clear()
+        self._clear_issues()
         self.recorder.start(path, self._meta())
+        self.issues.start_csv(path[:-4] + "_issues.csv")
         self._save_settings()
         self.rec_btn.setText("Stop recording")
         self.rec_lbl.setText(f"Recording to {path}")
@@ -473,6 +523,7 @@ class MainWindow(QMainWindow):
         self.sample_ed.setText(meta.get("sample", self.sample_ed.text()))
         self.operator_ed.setText(meta.get("operator", self.operator_ed.text()))
         self.recorder.start(path, {}, append=True)
+        self.issues.start_csv(path[:-4] + "_issues.csv", append=True)
         self.rec_btn.setText("Stop recording")
         last = self.tracker.last_cycle
         self.rec_lbl.setText(f"Resumed {os.path.basename(path)} at cycle {last} ({len(rows)} readings)")
@@ -521,6 +572,40 @@ class MainWindow(QMainWindow):
         self.sim_lbl.setText(f"Starting {n} cycles at {ms / 1000:.2f} s each…")
         if not self.recorder.active:
             self.statusBar().showMessage("Tip: press Start recording first to save the simulated readings to CSV.", 8000)
+
+    def apply_fault(self) -> None:
+        name, cmds = SCENARIOS[self.fault_box.currentIndex()]
+        if cmds is None:                                       # custom: "open 3, 7; short 6-7-8"
+            cmds = ["FAULT CLEAR"]
+            for part in self.fault_custom.text().split(";"):
+                kind, _, pins = part.strip().partition(" ")
+                if kind.lower() in ("open", "short") and pins.strip():
+                    cmds.append(f"FAULT {kind.upper()} {pins.strip()}")
+            name = self.fault_custom.text().strip() or "no fault"
+        for c in cmds:
+            self.send(c)
+        self.issues.add(self.device_cycle or 0, "info", "SCENARIO", "", f"simulator fault scenario: {name}")
+
+    # ------------------------------------------------------------------ issues
+    def _on_issue(self, ev) -> None:
+        t = self.issue_table
+        t.insertRow(0)
+        for c, v in enumerate([ev.timestamp[11:], str(ev.cycle), ev.severity.upper(), ev.kind, ev.pins, ev.detail]):
+            it = QTableWidgetItem(v)
+            if c == 2 or c == 3:
+                it.setForeground(QColor(SEVERITY_COLOR.get(ev.severity, "#e6ebf0")))
+            t.setItem(0, c, it)
+        n = self.issues.counts()
+        self.bottom_tabs.setTabText(1, f"Issues ({n['critical']} critical, {n['warning']} warning)"
+                                    if n["critical"] or n["warning"] else f"Issues ({len(self.issues.events)})")
+        if ev.severity == "critical":
+            self.bottom_tabs.setCurrentIndex(1)
+
+    def _clear_issues(self) -> None:
+        self.issues.events.clear()
+        self.issues.reset_state()
+        self.issue_table.setRowCount(0)
+        self.bottom_tabs.setTabText(1, "Issues (0)")
 
     # ------------------------------------------------------------------ kit commands with prompts
     def set_cycle(self) -> None:
@@ -572,7 +657,13 @@ class MainWindow(QMainWindow):
             it = self.table.item(r, 5)
             it.setText(label); it.setForeground(QColor(color))
             f = it.font(); f.setBold(label in ("FAIL", "WEAR", "OPEN")); it.setFont(f)
-            self.table.item(r, 6).setText(str(st.fail_cycle) if st.fail_cycle is not None else "–")
+            fc = self.table.item(r, 6)
+            if st.fail_cycle is not None:
+                fc.setText(f"{st.fail_cycle} ({st.fail_reason})")
+            elif st.short_with:
+                fc.setText("shorted to " + ", ".join(str(x) for x in sorted(st.short_with)))
+            else:
+                fc.setText("–")
 
     def _refresh_plot(self) -> None:
         for p, st in self.tracker.pins.items():
@@ -637,6 +728,7 @@ class MainWindow(QMainWindow):
             ev.ignore()
             return
         self.recorder.stop()
+        self.issues.stop_csv()
         self.link.close()
         self._save_settings()
         ev.accept()

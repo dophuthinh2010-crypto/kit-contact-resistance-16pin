@@ -28,6 +28,7 @@ linked by 34-way IDC ribbons (16 force + 16 sense + 2 GND).
 | `docs/concept_sketch.jpg` | Original concept sketch |
 | `docs/footprint_preview.png` | Preview of the connector footprints |
 | `docs/3d-model/index.html` | Interactive 3D model of the kit (open in a browser; loads three.js from a CDN) |
+| `docs/fault-protection.md` | Open/short fault review, isolation test, rev B protection changes, scenario results |
 | `docs/serial-protocol.md` | Serial protocol between the ESP32 and the laptop |
 | `firmware/crkit_esp32/` | ESP32 firmware (Arduino): scan, mate detect, calibration |
 | `desktop-app/` | Desktop app (Python, PySide6): connect, record to CSV, live table and plot |

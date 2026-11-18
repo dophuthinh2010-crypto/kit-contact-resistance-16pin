@@ -15,7 +15,7 @@
 #include <Adafruit_ADS1X15.h>
 #include <Preferences.h>
 
-#define FW_VERSION "0.2.0"
+#define FW_VERSION "0.3.0"
 
 // ---------------- pin map (docs/design.md) ----------------
 const int PIN_SR_DATA  = 23;   // 74HC595 SER
@@ -35,6 +35,11 @@ const float ACS_SENS_5V    = 0.185f;   // V/A at a 5.000 V supply (ACS712-05B)
 const float INA_RAIL_HI    = 3.20f;    // V, above this the INA333 output is clipped
 const float INA_RAIL_LO    = 0.06f;    // V, below this the INA333 output is clipped
 const float I_OPEN_LIMIT   = 0.20f;    // A, below this the contact is treated as open
+const float I_OVER_LIMIT   = 0.75f;    // A, above this the force path bypasses R_LO (short to GND): switch off
+const float ISO_LIMIT_UV   = 150.0f;   // uV on an undriven pin's contact = that pin is shorted to the driven one
+const float V5_MIN = 4.6f, V5_MAX = 5.4f;
+// Board rev B: INA333 REF sits at ~0.25 V (buffered divider), read on ADS1115 AIN3, so the
+// amplifier can show contact voltages down to zero. On a rev A board (REF = GND) AIN3 reads ~0.
 const int   SAMPLES_ZERO   = 16;
 const int   SAMPLES_PIN    = 8;
 const int   SETTLE_MS      = 5;        // after switching the current on
@@ -49,6 +54,9 @@ bool  autoMode = true;
 long  cycleCount = 0;
 float zeroOffset[NPINS];   // mOhm, subtracted from each reading
 float gainCorr = 1.0f;     // multiplies each reading
+float vRef = 0.0f;         // INA333 REF voltage, read at the start of each scan
+bool  isoEnabled = true;   // run the isolation (short) test after every scan
+bool  alarmed = false;     // an ALARM stopped this scan
 
 // ---------------- low-level helpers ----------------
 void shiftPins(uint16_t bits) {             // bit n-1 = MOSFET Qn
@@ -105,23 +113,32 @@ Reading measurePin(int p, float v0, float v5) {
   delay(1);
   digitalWrite(PIN_I_EN, HIGH);                // current pulse starts (about 25 ms)
   delay(SETTLE_MS);
-  float va = 0, vi = 0, rminRaw = INFINITY;
   float sens = ACS_SENS_5V * (v5 / 5.0f);      // ACS712 is ratiometric to its supply
+  float iNow = (ads.computeVolts(ads.readADC_SingleEnded(0)) - v0) / sens;
+  if (iNow > I_OVER_LIMIT) {                   // force path shorted past R_LO: stop at once
+    digitalWrite(PIN_I_EN, LOW);
+    shiftPins(0);
+    rd.i = iNow; rd.vmv = NAN; rd.rraw = NAN; rd.r = NAN; rd.rmin = NAN; rd.flag = "OPEN";
+    Serial.printf("ALARM,%ld,OVERCURRENT,%.3f A on pin %d: test current switched off, scan stopped. Check for a pin shorted to GND or chassis.\n", cycleCount, iNow, p + 1);
+    alarmed = true;
+    return rd;
+  }
+  float va = 0, vi = 0, rminRaw = INFINITY;
   for (int s = 0; s < SAMPLES_PIN; s++) {      // interleave so both see the same moment
     float vas = ads.computeVolts(ads.readADC_SingleEnded(0));
     float vis = ads.computeVolts(ads.readADC_SingleEnded(1));
     va += vas; vi += vis;
     float is = (vas - v0) / sens;              // this sample's own R, to find the lowest of the 8
-    if (is > 0.001f) { float rs = (vis / inaGain) / is * 1000.0f; if (rs < rminRaw) rminRaw = rs; }
+    if (is > I_OPEN_LIMIT) { float rs = ((vis - vRef) / inaGain) / is * 1000.0f; if (rs < rminRaw) rminRaw = rs; }
   }
   digitalWrite(PIN_I_EN, LOW);                 // current pulse ends
   shiftPins(0);
   va /= SAMPLES_PIN; vi /= SAMPLES_PIN;
 
   rd.i   = (va - v0) / sens;
-  float vc = vi / inaGain;                     // contact voltage, V
+  float vc = (vi - vRef) / inaGain;            // contact voltage, V
   rd.vmv = vc * 1000.0f;
-  rd.rraw = (rd.i > 0.001f) ? vc / rd.i * 1000.0f : NAN;   // mOhm
+  rd.rraw = (rd.i >= I_OPEN_LIMIT) ? vc / rd.i * 1000.0f : NAN;   // mOhm, none when open
   rd.r   = (rd.rraw - zeroOffset[p]) * gainCorr;
   rd.rmin = isinf(rminRaw) ? NAN : (rminRaw - zeroOffset[p]) * gainCorr;
 
@@ -130,6 +147,46 @@ Reading measurePin(int p, float v0, float v5) {
   else if (vi <= INA_RAIL_LO)   rd.flag = "UNDER";
   else                          rd.flag = "OK";
   return rd;
+}
+
+// ---------------- isolation (short) test ----------------
+// Drive pin a, then read the contact voltage of every other pin b. With no short, no current
+// flows through contact b and its voltage is ~0. If b is shorted to a (on the plug side or on a
+// board), part of the test current returns through contact b and its voltage rises.
+void isolationTest(float v0, float v5) {
+  int found = 0;
+  bool seen[NPINS][NPINS] = {};
+  float sens = ACS_SENS_5V * (v5 / 5.0f);
+  for (int a = 0; a < NPINS && !alarmed; a++) {
+    shiftPins(1u << a);
+    delay(1);
+    digitalWrite(PIN_I_EN, HIGH);
+    delay(SETTLE_MS);
+    float ia = (ads.computeVolts(ads.readADC_SingleEnded(0)) - v0) / sens;
+    if (ia > I_OVER_LIMIT) {
+      digitalWrite(PIN_I_EN, LOW); shiftPins(0);
+      Serial.printf("ALARM,%ld,OVERCURRENT,%.3f A driving pin %d in the isolation test: current switched off.\n", cycleCount, ia, a + 1);
+      alarmed = true; break;
+    }
+    if (ia >= I_OPEN_LIMIT) {                       // an open pin can't drive current: skip it
+      for (int b = 0; b < NPINS; b++) {
+        if (b == a) continue;
+        selectMux(b);
+        delayMicroseconds(200);
+        float uv = (ads.computeVolts(ads.readADC_SingleEnded(1)) - vRef) / inaGain * 1e6f;
+        if (uv > ISO_LIMIT_UV) {
+          int lo = min(a, b), hi = max(a, b);
+          if (!seen[lo][hi]) {
+            seen[lo][hi] = true; found++;
+            Serial.printf("SHORT,%ld,%d,%d,%.0f\n", cycleCount, lo + 1, hi + 1, uv);
+          }
+        }
+      }
+    }
+    digitalWrite(PIN_I_EN, LOW);
+    shiftPins(0);
+  }
+  Serial.printf("ISO,%ld,%d\n", cycleCount, found);
 }
 
 // ---------------- full scan ----------------
@@ -143,14 +200,20 @@ void runScan(const char* trigger, bool countIt, float* raw = nullptr, int onlyPi
   delay(2);
   float v0 = readVolts(0, SAMPLES_ZERO);       // ACS712 zero, no current flowing
   float v5 = readVolts(2, 4) * 2.0f;           // 5 V rail through the 10k/10k divider
+  vRef = readVolts(3, 4);                       // INA333 REF (rev B: ~0.25 V; rev A: 0 V)
+  alarmed = false;
   Serial.printf("CYCLE,%ld,%s\n", cycleCount, trigger);
   Serial.printf("ZERO,%ld,%.4f,%.3f\n", cycleCount, v0, v5);
-  for (int p = 0; p < NPINS; p++) {
+  if (v5 < V5_MIN || v5 > V5_MAX)
+    Serial.printf("ALARM,%ld,SUPPLY,5 V rail reads %.2f V (expected %.1f-%.1f V)\n", cycleCount, v5, V5_MIN, V5_MAX);
+  for (int p = 0; p < NPINS && !alarmed; p++) {
     if (onlyPin >= 0 && p != onlyPin) continue;
     Reading rd = measurePin(p, v0, v5);
     if (raw) raw[p] = rd.rraw;
+    if (alarmed) break;
     Serial.printf("DATA,%ld,%d,%.4f,%.4f,%.4f,%s,%.4f\n", cycleCount, p + 1, rd.i, rd.vmv, rd.r, rd.flag, rd.rmin);
   }
+  if (isoEnabled && onlyPin < 0 && !alarmed) isolationTest(v0, v5);
   allOff();
   digitalWrite(PIN_MUX_EN, HIGH);
   digitalWrite(PIN_LED, LOW);
@@ -181,6 +244,9 @@ void handleCommand(String line) {
   }
   else if (cmd == "AUTO") {
     autoMode = arg.toInt() != 0; saveBool("auto", autoMode); Serial.println("OK,AUTO");
+  }
+  else if (cmd == "ISO") {
+    isoEnabled = arg.toInt() != 0; Serial.println("OK,ISO");
   }
   else if (cmd == "CALZERO") {
     float raw[NPINS];

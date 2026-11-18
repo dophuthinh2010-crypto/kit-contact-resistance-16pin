@@ -40,6 +40,30 @@ class Data:
 
 
 @dataclass(frozen=True)
+class Short:
+    """Isolation test: pins a and b are electrically connected (they should not be)."""
+    cycle: int
+    pin_a: int
+    pin_b: int
+    microvolts: float
+
+
+@dataclass(frozen=True)
+class IsoDone:
+    """Isolation test finished for this cycle; `pairs` shorted pairs were found."""
+    cycle: int
+    pairs: int
+
+
+@dataclass(frozen=True)
+class Alarm:
+    """Kit-level fault, e.g. OVERCURRENT (test current switched off), SUPPLY (5 V out of range)."""
+    cycle: int
+    code: str
+    detail: str
+
+
+@dataclass(frozen=True)
 class CycleEnd:
     cycle: int
     ms: int
@@ -60,7 +84,7 @@ class Info:
     text: str
 
 
-Message = Union[Hello, CycleStart, Zero, Data, CycleEnd, Ack, Error, Info]
+Message = Union[Hello, CycleStart, Zero, Data, Short, IsoDone, Alarm, CycleEnd, Ack, Error, Info]
 
 
 def _num(s: str) -> float:
@@ -91,6 +115,15 @@ def parse_line(line: str) -> Optional[Message]:
                 return None
             rmin = _num(parts[7]) if len(parts) >= 8 and parts[7] else None
             return Data(int(parts[1]), pin, _num(parts[3]), _num(parts[4]), _num(parts[5]), flag, rmin)
+        if kind == "SHORT" and len(parts) >= 5:
+            a, b = int(parts[2]), int(parts[3])
+            if not (1 <= a <= NPINS and 1 <= b <= NPINS) or a == b:
+                return None
+            return Short(int(parts[1]), min(a, b), max(a, b), _num(parts[4]))
+        if kind == "ISO" and len(parts) >= 3:
+            return IsoDone(int(parts[1]), int(parts[2]))
+        if kind == "ALARM" and len(parts) >= 3:
+            return Alarm(int(parts[1]), parts[2].upper(), line.split(",", 3)[3].strip() if len(parts) >= 4 else "")
         if kind == "END" and len(parts) >= 3:
             return CycleEnd(int(parts[1]), int(parts[2]))
         if kind == "OK" and len(parts) >= 2:

@@ -171,3 +171,118 @@ class SimulatorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------- fault scenarios
+from crkit_app.protocol import Short, IsoDone, Alarm  # noqa: E402
+from crkit_app.analysis import short_groups  # noqa: E402
+from crkit_app.issues import IssueLog  # noqa: E402
+
+
+def run_scan(kit):
+    """One SCAN on the simulated kit: returns (data by pin, shorted pairs, iso count)."""
+    kit.write(b"SCAN\n")
+    data, pairs, iso = {}, {}, None
+    for _ in range(4000):
+        m = parse_line(kit.readline().decode())
+        if isinstance(m, Data):
+            data[m.pin] = m
+        elif isinstance(m, Short):
+            pairs[(m.pin_a, m.pin_b)] = m.microvolts
+        elif isinstance(m, IsoDone):
+            iso = m.pairs
+        elif isinstance(m, CycleEnd):
+            break
+    return data, pairs, iso
+
+
+def fresh_kit(*faults):
+    kit = SimulatedKit(); kit.auto = False; kit.read_timeout = 0.005
+    for f in faults:
+        kit.write((f + "\n").encode())
+    for _ in range(50):
+        kit.readline()
+    return kit
+
+
+class FaultParsingTests(unittest.TestCase):
+    def test_lines(self):
+        self.assertEqual(parse_line("SHORT,7,5,4,880"), Short(7, 4, 5, 880.0))
+        self.assertEqual(parse_line("ISO,7,0"), IsoDone(7, 0))
+        a = parse_line("ALARM,7,OVERCURRENT,0.871 A on pin 3: test current switched off")
+        self.assertEqual((a.code, a.detail), ("OVERCURRENT", "0.871 A on pin 3: test current switched off"))
+        self.assertIsNone(parse_line("SHORT,7,4,4,10"))
+
+    def test_groups(self):
+        self.assertEqual(short_groups([(10, 11), (11, 12), (4, 5)]), [frozenset({4, 5}), frozenset({10, 11, 12})])
+
+
+class ScenarioTests(unittest.TestCase):
+    def test_no_fault_no_false_alarms(self):
+        kit = fresh_kit()
+        for _ in range(20):
+            data, pairs, iso = run_scan(kit)
+            self.assertEqual(iso, 0)
+            self.assertTrue(all(d.flag == "OK" for d in data.values()))
+
+    def test_one_pin_open(self):
+        data, pairs, iso = run_scan(fresh_kit("FAULT OPEN 5"))
+        self.assertEqual([p for p, d in data.items() if d.flag == "OPEN"], [5])
+        self.assertTrue(math.isnan(data[5].r_mohm))
+        self.assertEqual(iso, 0)
+
+    def test_three_pins_open(self):
+        data, pairs, iso = run_scan(fresh_kit("FAULT OPEN 2,9,14"))
+        self.assertEqual(sorted(p for p, d in data.items() if d.flag == "OPEN"), [2, 9, 14])
+        self.assertEqual(iso, 0)
+
+    def test_two_pins_shorted(self):
+        base, _, _ = run_scan(fresh_kit())
+        data, pairs, iso = run_scan(fresh_kit("FAULT SHORT 4-5"))
+        self.assertEqual(iso, 1)
+        self.assertEqual(set(pairs), {(4, 5)})
+        for p in (4, 5):                      # parallel contacts: roughly half the normal reading
+            self.assertLess(data[p].r_mohm, 0.7 * base[p].r_mohm)
+        self.assertTrue(all(d.flag == "OK" for d in data.values()))   # a short is NOT visible as a flag
+
+    def test_three_pins_shorted(self):
+        data, pairs, iso = run_scan(fresh_kit("FAULT SHORT 10-11-12"))
+        self.assertEqual(iso, 3)
+        self.assertEqual(short_groups(pairs), [frozenset({10, 11, 12})])
+
+    def test_open_and_short_together(self):
+        data, pairs, iso = run_scan(fresh_kit("FAULT OPEN 1", "FAULT SHORT 7-8"))
+        self.assertEqual(data[1].flag, "OPEN")
+        self.assertEqual(set(pairs), {(7, 8)})
+
+    def test_tracker_fails_shorted_pins(self):
+        kit = fresh_kit("FAULT SHORT 4-5")
+        t = Tracker(consecutive=3)
+        for _ in range(3):
+            data, pairs, iso = run_scan(kit)
+            for d in data.values():
+                t.add(d)
+            t.end_isolation(max(d.cycle for d in data.values()), pairs)
+        self.assertEqual(t.status(4), "fail")
+        self.assertIn("short with pin 5", t.pins[4].fail_reason)
+        self.assertEqual(t.status(6), "ok")
+
+
+class IssueLogTests(unittest.TestCase):
+    def test_transitions_and_csv(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = IssueLog()
+            log.start_csv(os.path.join(d, "s_issues.csv"))
+            log.on_data(Data(1, 5, 0.0, 0.0, math.nan, "OPEN"))
+            log.on_data(Data(2, 5, 0.0, 0.0, math.nan, "OPEN"))      # still open: no new event
+            log.on_data(Data(3, 5, 0.62, 1.8, 2.9, "OK"))             # cleared
+            log.on_isolation(3, {(10, 11): 600.0, (11, 12): 580.0, (10, 12): 590.0})
+            log.on_isolation(4, {(10, 11): 600.0, (11, 12): 580.0, (10, 12): 590.0})   # same group: no new event
+            log.on_isolation(5, {})
+            log.on_alarm(Alarm(6, "OVERCURRENT", "0.87 A"))
+            log.stop_csv()
+            kinds = [e.kind for e in log.events]
+            self.assertEqual(kinds, ["OPEN", "OPEN cleared", "SHORT", "SHORT cleared", "ALARM OVERCURRENT"])
+            self.assertEqual(log.events[2].pins, "10, 11, 12")
+            with open(os.path.join(d, "s_issues.csv"), encoding="utf-8") as fh:
+                self.assertEqual(len(fh.read().strip().splitlines()), 6)

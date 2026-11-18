@@ -20,6 +20,9 @@ class PinState:
     maximum: float = -math.inf
     over_run: int = 0
     fail_cycle: Optional[int] = None
+    fail_reason: str = ""
+    short_with: frozenset = frozenset()   # pins this one was shorted to in the latest isolation test
+    short_run: int = 0
     mins: List[float] = field(default_factory=list)      # per-cycle minimum R (valid scans only)
 
     @property
@@ -72,26 +75,49 @@ class Tracker:
             st.over_run = st.over_run + 1 if above else 0
             if st.over_run >= self.consecutive:
                 st.fail_cycle = d.cycle
+                st.fail_reason = {"OPEN": "open", "OVER": "above range"}.get(d.flag, f"above {self.limit:g} mOhm")
         self.last_cycle = max(self.last_cycle, d.cycle)
 
+    def end_isolation(self, cycle: int, pairs) -> List[frozenset]:
+        """Apply one isolation test result. `pairs` = iterable of (pin_a, pin_b).
+        Returns the groups of pins shorted together. A pin fails after `consecutive` tests in a row with a short."""
+        groups = short_groups(pairs)
+        member = {p: g for g in groups for p in g}
+        for p, st in self.pins.items():
+            g = member.get(p)
+            st.short_with = frozenset(g - {p}) if g else frozenset()
+            if st.fail_cycle is None:
+                st.short_run = st.short_run + 1 if g else 0
+                if st.short_run >= self.consecutive:
+                    st.fail_cycle = cycle
+                    st.fail_reason = "short with pin " + ", ".join(str(x) for x in sorted(st.short_with))
+        self.last_cycle = max(self.last_cycle, cycle)
+        return groups
+
     def recompute(self) -> None:
-        """Re-apply the fail rule to all stored readings (after the limit changes)."""
+        """Re-apply the resistance fail rule to all stored readings (after the limit changes).
+        Short failures are kept as they were found."""
         for st in self.pins.values():
-            st.over_run, st.fail_cycle = 0, None
+            if st.fail_cycle is not None and st.fail_reason.startswith("short"):
+                continue
+            st.over_run, st.fail_cycle, st.fail_reason = 0, None, ""
             for c, v in zip(st.cycles, st.values):
                 above = math.isnan(v) or v > self.limit
                 if st.fail_cycle is None:
                     st.over_run = st.over_run + 1 if above else 0
                     if st.over_run >= self.consecutive:
                         st.fail_cycle = c
+                        st.fail_reason = "open / above range" if math.isnan(v) else f"above {self.limit:g} mOhm"
 
     def status(self, pin: int) -> str:
-        """'fail', 'open', 'wear', 'ok' or 'none' (no reading yet)."""
+        """'fail', 'short', 'open', 'wear', 'ok' or 'none' (no reading yet)."""
         st = self.pins[pin]
         if st.fail_cycle is not None:
             return "fail"
         if not st.cycles:
             return "none"
+        if st.short_with:
+            return "short"
         if st.latest_flag == "OPEN":
             return "open"
         if not math.isnan(st.latest) and st.latest > self.limit * self.warn_fraction:
@@ -104,3 +130,13 @@ class Tracker:
     def first_failure(self) -> Optional[tuple]:
         fails = [(st.fail_cycle, p) for p, st in self.pins.items() if st.fail_cycle is not None]
         return min(fails) if fails else None
+
+
+def short_groups(pairs) -> List[frozenset]:
+    """Join shorted pairs into groups: (10,11) and (11,12) -> {10, 11, 12}."""
+    groups: List[set] = []
+    for a, b in pairs:
+        hit = [g for g in groups if a in g or b in g]
+        merged = {a, b}.union(*hit) if hit else {a, b}
+        groups = [g for g in groups if g not in hit] + [merged]
+    return sorted((frozenset(g) for g in groups), key=min)

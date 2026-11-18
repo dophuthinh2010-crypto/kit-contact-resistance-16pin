@@ -32,7 +32,7 @@ R_n = (V_CONTACT / G) / I,   I = (V_ACS - V_ACS0) / (0.185 * V_5V / 5)
 4. **Sense muxes:** U4 (female) / U5 (male) CD74HC4067, shared S0–S3 and /E. 1 kΩ + BAT54S clamp on each input.
 5. **Amplifier:** INA333, RG = 1.00 kΩ (G = 101, about 51 mΩ full scale) or 10.0 kΩ (G = 11, about 470 mΩ) via JP1.
    100 pF per input, 10 nF across the inputs, 1 kΩ/100 nF output filter.
-6. **ADC:** ADS1115 at 0x48. AIN0 = I_SENSE, AIN1 = V_CONTACT, AIN2 = +5V/2, AIN3 spare.
+6. **ADC:** ADS1115 at 0x48. AIN0 = I_SENSE, AIN1 = V_CONTACT, AIN2 = +5V/2, AIN3 = INA333 REF (rev B, about 0.25 V).
 7. **I/O:** J4 mate-detect switch (cycle counter), LED, J5 I²C spare, test points.
 
 ## ESP32 pin map (DevKitC V4, WROOM-32E)
@@ -64,6 +64,10 @@ Odd pin 2n−1 = force n, even pin 2n = sense n (n = 1..16). Pins 33 and 34 = GN
 - Ratings: 5 A all contacts, 5 mΩ max initially / 10 mΩ after conditioning, 500 operations,
   0.8–2.3 N per contact pair.
 
+## Fault protection
+
+Shorted pins are current-limited by R_HI + R_LO (≤ 0.63 A) and found by the isolation test after each scan. Rev B changes (REF offset, 10 kΩ sense resistors, reverse-polarity MOSFET, 10 W R_HI, ACS712 output clamp, ribbon pins 33/34 unconnected): see `docs/fault-protection.md`.
+
 ## Layout rules
 
 - Main board: 2-layer, 2 oz, solid GND bottom. Zones: power (left), switching (centre), analog + MCU (right).
@@ -86,5 +90,5 @@ Calibration: 10 mΩ 4-terminal shunt (gain), shorted bar (zero per channel), DMM
 - [ ] Failure limit (proposed R > 10 mΩ, keep cycling past 500)
 - [ ] Cycle method: manual or actuator
 - [ ] Logging: USB serial, or Wi-Fi/SD
-- [ ] Current accuracy: ACS712 gives about ±2–3% after averaging; a shunt on AIN3 is an option
+- [ ] Current accuracy: ACS712 gives about ±2–3% after averaging; a precision shunt would need a second ADC (AIN3 now reads the INA333 REF)
 - [ ] Verify the footprint against a real RP16-T / RS16P-T sample before ordering PCBs
