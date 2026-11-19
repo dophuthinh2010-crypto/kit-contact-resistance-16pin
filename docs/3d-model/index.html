@@ -132,6 +132,31 @@ td:last-child { text-align: right; font-family: var(--mono); font-variant-numeri
 }
 @media (prefers-reduced-motion: reduce) { #bars .bar, #avgbars .abar { transition: none; } }
 </style>
+<script>
+/* If the 3D view cannot start, say why instead of showing an empty page. */
+(function () {
+  function show(msg) {
+    if (document.getElementById("load-error")) return;
+    var d = document.createElement("div");
+    d.id = "load-error";
+    d.setAttribute("role", "alert");
+    d.style.cssText = "position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);max-width:560px;z-index:99;" +
+      "background:#2a1416;color:#ffd9d6;border:1px solid #e2574c;border-radius:8px;padding:16px 20px;font:14px/1.5 system-ui,sans-serif";
+    d.innerHTML = "<b>The 3D view could not start.</b><br>" + msg +
+      "<br><br>Open this file directly in Chrome or Edge (double-click <code>index.html</code> in the downloaded folder) with internet on: " +
+      "the 3D library (three.js) loads from cdn.jsdelivr.net. GitHub's file view only shows the source code, it does not run the page.";
+    (document.body || document.documentElement).appendChild(d);
+  }
+  window.addEventListener("error", function (e) {
+    if (e.target && e.target.tagName === "SCRIPT") show("A script failed to load: " + (e.target.src || "module"));
+    else if (e.message) show("Error: " + e.message);
+  }, true);
+  window.addEventListener("unhandledrejection", function (e) { show("Error: " + (e.reason && e.reason.message || e.reason)); });
+  window.addEventListener("load", function () {
+    setTimeout(function () { if (!window.__sceneReady) show("The scene did not finish loading within 12 seconds (no internet, the CDN blocked, or WebGL turned off in this browser)."); }, 12000);
+  });
+})();
+</script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -915,7 +940,7 @@ function resize() {
 }
 new ResizeObserver(resize).observe(stage);
 resize(); goView("overview", true);
-renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); window.__sceneReady = true; });
 </script>
 </body>
 </html>
