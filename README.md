@@ -27,6 +27,7 @@ linked by 34-way IDC ribbons (16 force + 16 sense + 2 GND).
 | `docs/design.md` | Design summary: schematic blocks, pin map, connector pinouts, layout rules, open items |
 | `docs/concept_sketch.jpg` | System concept diagram (redrawn from the original sketch, `docs/concept_sketch_original.jpg`; source: `hardware/scripts/draw_concept_diagram.py`) |
 | `docs/footprint_preview.png` | Preview of the connector footprints |
+| `docs/CR-TEST_presentation.pptx` | 13-slide PowerPoint presentation of the kit (source: `docs/presentation/build_deck.js`, pptxgenjs) |
 | `docs/3d-model/index.html` | Interactive 3D model of the kit (open in a browser; loads three.js from a CDN) |
 | `docs/fault-protection.md` | Open/short fault review, isolation test, rev B protection changes, scenario results |
 | `docs/serial-protocol.md` | Serial protocol between the ESP32 and the laptop |
