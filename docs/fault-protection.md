@@ -31,7 +31,7 @@ averages about 1.9 W at one cycle per second, and less at the 3 s cycle you use.
 ## Detecting shorts
 
 A short makes the affected pins read *lower*, so the 10 mΩ limit never catches it. The **isolation
-test** (firmware 0.3.0, after each scan) drives each pin in turn and reads the contact voltage of
+test** (firmware 0.3.0+, after each scan) drives each pin in turn and reads the contact voltage of
 every other pin through the existing muxes. Without a short, no current flows through an undriven
 contact, so its voltage is about 0. If the pins are shorted, part of the current returns through
 that contact. With healthy 2.8 mΩ contacts, the voltage on an undriven pin is:
@@ -42,11 +42,22 @@ that contact. With healthy 2.8 mΩ contacts, the voltage on an undriven pin is:
 | 3 | 585 µV | +59 mV |
 | 4 | 439 µV | +44 mV |
 | 8 | 219 µV | +22 mV |
+| 16 (all pins) | ~110 µV (85–130 µV, depends on the contacts) | +11 mV |
 
 On rev A, INA333 REF is tied to GND, so the output cannot go below about 50 mV. A 3-pin short is then
 barely above that floor and a 4-pin short is below it. **Rev B lifts REF to about 0.25 V**, so every
 row is well clear of the noise (about 0.8 mV rms). The firmware reads REF on AIN3 and subtracts it.
-The threshold is 150 µV.
+
+**All 16 pins shorted (found 19 Nov 2026).** Firmware 0.3 used a 150 µV limit, which a 16-pin short
+(about 110 µV) stays under: the simulated run detected nothing and every pin quietly read 0.2 mΩ.
+Firmware 0.4.0 fixes this two ways:
+
+1. Isolation limit 150 → **50 µV**, measured against each channel's own current-off baseline (read at the
+   start of every isolation test), so the INA333 offset (up to ±25 µV) and thermal EMFs cancel.
+   Noise after averaging is a few µV, so 50 µV keeps a wide margin both ways.
+2. A plausibility check: any reading below **0.8 mΩ** is flagged `LOW`. No real contact on this kit reads
+   that low (new contacts measure about 2–3.5 mΩ), so LOW means pins are shorted. It works even with the
+   isolation test turned off (`ISO 0`), and the app counts LOW toward the 3-in-a-row fail rule.
 
 ## Rev B changes
 
@@ -60,7 +71,8 @@ The threshold is 150 µV.
 | 6 | Ribbon pins 33/34: leave **unconnected** instead of GND | A crushed IDC next to Force 16 can no longer short it to GND | none |
 
 Firmware (0.3.0, done): overcurrent cut-off above 0.75 A, isolation test, `OPEN` readings sent as
-`nan`, supply alarm outside 4.6–5.4 V. Firmware (to do): enable the ESP32 task watchdog, and stop a
+`nan`, supply alarm outside 4.6–5.4 V. Firmware (0.4.0, done): isolation limit 50 µV against a
+current-off baseline, `LOW` flag below 0.8 mΩ. Firmware (to do): enable the ESP32 task watchdog, and stop a
 scan if the mate-detect switch opens mid-scan.
 
 ## Scenario run (simulated kit, app code, 30 cycles each: fault on cycles 11–20)
@@ -72,6 +84,12 @@ scan if the mate-detect switch opens mid-scan.
 | 3 pins open (2, 9, 14) | cycle 11 | 2, 9, 14 at cycle 13 (open) | cycle 21 | 3 × OPEN, 3 × FAIL, 3 × cleared |
 | 2 pins shorted (4–5) | cycle 11 | 4, 5 at cycle 13 (short with each other) | cycle 21 | SHORT, 2 × FAIL, SHORT cleared. R 2.26 → 1.24 mΩ |
 | 3 pins shorted (10–11–12) | cycle 11 | 10, 11, 12 at cycle 13 | cycle 21 | SHORT (one group event), 3 × FAIL, cleared. R ≈ 3 → 1.05 mΩ |
+| **All 16 pins shorted**, firmware 0.3 | **not detected** | none | | nothing. R 2.2–3.5 → 0.2 mΩ on every pin |
+| **All 16 pins shorted**, firmware 0.4 | cycle 11 | all 16 at cycle 13 | cycle 21 | SHORT (one group of 16, up to 132 µV), 16 × LOW, 16 × FAIL, all cleared |
+
+Rerun on 19 Nov 2026 with firmware 0.4 logic: the five earlier scenarios give the same results, with no
+false alarms. Protection is unchanged for the all-pin short: it only puts the contacts in parallel, the
+current stays at 0.627 A (limited by R_HI + R_LO), and the one switched-on AO3400A carries it.
 
 The simulator models rev B (REF = 0.25 V). On real hardware, check the isolation test with a
 deliberate solder-bridge sample before trusting a long run.

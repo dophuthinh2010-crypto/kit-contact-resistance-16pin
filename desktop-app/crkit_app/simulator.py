@@ -76,7 +76,7 @@ class SimulatedKit:
             self._out.append(s)
 
     def _hello(self) -> None:
-        self._emit(f"HELLO,CRKIT,0.3.0-sim,{self.gain},{self.cycle}")
+        self._emit(f"HELLO,CRKIT,0.4.0-sim,{self.gain},{self.cycle}")
 
     def _true_r(self, p: int, n: int) -> float:
         r = self.r0[p] + self.a[p] * (n / 500) ** 1.6
@@ -87,7 +87,8 @@ class SimulatedKit:
     # ---- measurement physics -------------------------------------------------
     REF = 0.25            # V, INA333 REF offset (board rev B)
     R_SHORT = 0.0005      # ohm, resistance of an injected pin-to-pin short
-    ISO_LIMIT_UV = 150.0  # isolation test: contact voltage above this on an undriven pin = short
+    ISO_LIMIT_UV = 50.0   # isolation test (fw 0.4): contact voltage above its current-off baseline = short
+    R_LOW_LIMIT = 0.8     # mOhm, readings below this are flagged LOW (possible short)
 
     def _groups(self) -> dict:
         out = {}
@@ -104,8 +105,8 @@ class SimulatedKit:
         cond = 1 / r[p] + sum(1 / (r[m] + self.R_SHORT) for m in g if m != p and m not in self.open_pins)
         return 1 / cond
 
-    def _ina(self, v_contact: float) -> float:
-        vi = self.REF + self.gain * (v_contact + self._rng.gauss(0, 1.5e-6)) + self._rng.gauss(0, 0.0008)
+    def _ina(self, v_contact: float, offset_v: float = 0.0) -> float:
+        vi = self.REF + self.gain * (v_contact + offset_v + self._rng.gauss(0, 1.5e-6)) + self._rng.gauss(0, 0.0008)
         return min(3.25, max(0.05, vi))
 
     def _scan(self, trigger: str, count: bool, only_pin: int = -1) -> list:
@@ -138,9 +139,9 @@ class SimulatedKit:
             if i < 0.2:
                 flag, rr, rmin = "OPEN", math.nan, math.nan
             else:
-                flag = "OVER" if vi >= 3.2 else ("UNDER" if vi <= 0.06 else "OK")
                 raw[p] = vc / i * 1000
                 rr = (raw[p] - self.zero[p]) * self.gcorr
+                flag = "OVER" if vi >= 3.2 else ("UNDER" if vi <= 0.06 else ("LOW" if rr < self.R_LOW_LIMIT else "OK"))
                 rmin = (min(samples) - self.zero[p]) * self.gcorr if samples else math.nan
             self._emit(f"DATA,{self.cycle},{p + 1},{i:.4f},{vc * 1000:.4f},{rr:.4f},{flag},{rmin:.4f}")
         if only_pin < 0:
@@ -151,6 +152,10 @@ class SimulatedKit:
     def _isolation_test(self, r: list, groups: dict) -> None:
         """Drive each pin in turn and read every other pin's contact voltage: it must be ~0."""
         found = {}
+        if not hasattr(self, "_mux_offset"):           # INA333 input offset + thermal EMF per channel, up to ~25 uV
+            self._mux_offset = [self._rng.uniform(-25e-6, 25e-6) for _ in range(16)]
+        off = self._mux_offset
+        base = [sum((self._ina(0.0, off[b]) - self.REF) / self.gain for _ in range(4)) / 4 * 1e6 for b in range(16)]
         for a in range(16):
             if a in self.open_pins:
                 continue                                       # no current can flow: nothing to test from here
@@ -163,7 +168,7 @@ class SimulatedKit:
                 v = 0.0
                 if b in g and b not in self.open_pins:
                     v = i_tot * reff / (r[b] + self.R_SHORT) * r[b]
-                uv = (self._ina(v) - self.REF) / self.gain * 1e6
+                uv = sum((self._ina(v, off[b]) - self.REF) / self.gain for _ in range(2)) / 2 * 1e6 - base[b]
                 if uv > self.ISO_LIMIT_UV:
                     key = (min(a, b), max(a, b))
                     found[key] = max(found.get(key, 0.0), uv)

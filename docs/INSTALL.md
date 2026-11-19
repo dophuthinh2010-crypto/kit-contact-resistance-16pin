@@ -172,7 +172,7 @@ cd /d D:\kit-contact-resistance-16pin\desktop-app
 python -m unittest discover tests
 ```
 
-All 13 tests should pass.
+All 25 tests should pass.
 
 ## 6. Optional: stand-alone CR-TEST.exe
 

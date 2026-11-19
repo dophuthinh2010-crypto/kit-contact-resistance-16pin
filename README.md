@@ -34,7 +34,9 @@ linked by 34-way IDC ribbons (16 force + 16 sense + 2 GND).
 | `firmware/crkit_esp32/` | ESP32 firmware (Arduino): scan, mate detect, calibration |
 | `desktop-app/` | Desktop app (Python, PySide6): connect, record to CSV, live table and plot |
 | `docs/simulation/index.html` | 3D simulation: plug/unplug cycles, 16-pin scan through the ACS712 / INA333 / ADS1115 chain with noise, assumed wear model and life estimate |
-| `hardware/BOM.xlsx`, `hardware/BOM.csv` | Bill of materials for one kit: model, supplier, price, alternative part (shared sheet: https://claude.ai/artifact/EmcHuasxRLR5GvdHxSPXVu) |
+| `hardware/BOM.xlsx`, `hardware/BOM.csv` | Bill of materials for one kit (rev B, $154.55): model, supplier, price, alternative part (shared sheet: https://claude.ai/artifact/EmcHuasxRLR5GvdHxSPXVu) |
+| `hardware/kicad/` | **Rev B KiCad 8 projects**: main board (schematic + placed PCB), female and male jack boards, shared libraries, previews. Not routed yet: see `hardware/kicad/README.md` |
+| `hardware/scripts/kicad_gen/` | Python generator for those projects (`python build_all.py`) |
 | `hardware/footprints/McMurdo_RedRange.pretty/` | KiCad footprints for RP16-T and RS16P-T |
 | `hardware/scripts/gen_mcmurdo_fp.py` | Script that generates those footprints |
 
@@ -55,9 +57,10 @@ KiCad → Preferences → Manage Footprint Libraries → add
 ## Next steps
 
 - [ ] Review the design summary and open items
-- [ ] Draw the schematic in KiCad
-- [ ] Lay out the jack breakout boards (connector + IDC + force/sense traces)
-- [ ] Lay out the main board
+- [x] Schematic rev B in KiCad (main board + jack boards, generated)
+- [x] PCB placement, nets, net classes, outlines, GND pours
+- [ ] Open in KiCad 8, run ERC/DRC, route (hand-route power, Freerouting for the rest)
+- [ ] Check footprints against real parts, then order PCBs
 - [x] Firmware: scan loop, calibration, serial protocol
 - [x] Desktop app: recording, live view, resume, summary
 - [ ] Test firmware and app on the real kit

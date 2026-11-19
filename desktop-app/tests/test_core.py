@@ -267,6 +267,27 @@ class ScenarioTests(unittest.TestCase):
         self.assertIn("short with pin 5", t.pins[4].fail_reason)
         self.assertEqual(t.status(6), "ok")
 
+    def test_all_sixteen_pins_shorted(self):
+        kit = fresh_kit("FAULT SHORT " + "-".join(str(p) for p in range(1, 17)))
+        data, pairs, iso = run_scan(kit)
+        groups = short_groups(pairs)
+        self.assertEqual(groups, [frozenset(range(1, 17))])          # one group with every pin
+        self.assertTrue(all(d.flag == "LOW" for d in data.values()))  # and every reading is LOW
+        t = Tracker(consecutive=3)
+        for _ in range(3):
+            data, pairs, iso = run_scan(kit)
+            for d in data.values():
+                t.add(d)
+            t.end_isolation(max(d.cycle for d in data.values()), pairs)
+        self.assertEqual(sorted(t.failed_pins()), list(range(1, 17)))
+
+    def test_no_false_shorts_with_offsets(self):
+        kit = fresh_kit()
+        for _ in range(20):
+            data, pairs, iso = run_scan(kit)
+            self.assertEqual(pairs, {})
+            self.assertTrue(all(d.flag == "OK" for d in data.values()))
+
 
 class IssueLogTests(unittest.TestCase):
     def test_transitions_and_csv(self):
@@ -276,13 +297,15 @@ class IssueLogTests(unittest.TestCase):
             log.on_data(Data(1, 5, 0.0, 0.0, math.nan, "OPEN"))
             log.on_data(Data(2, 5, 0.0, 0.0, math.nan, "OPEN"))      # still open: no new event
             log.on_data(Data(3, 5, 0.62, 1.8, 2.9, "OK"))             # cleared
+            log.on_data(Data(3, 6, 0.62, 0.1, 0.18, "LOW"))           # below any real contact
+            log.on_data(Data(4, 6, 0.62, 1.8, 2.9, "OK"))
             log.on_isolation(3, {(10, 11): 600.0, (11, 12): 580.0, (10, 12): 590.0})
             log.on_isolation(4, {(10, 11): 600.0, (11, 12): 580.0, (10, 12): 590.0})   # same group: no new event
             log.on_isolation(5, {})
             log.on_alarm(Alarm(6, "OVERCURRENT", "0.87 A"))
             log.stop_csv()
             kinds = [e.kind for e in log.events]
-            self.assertEqual(kinds, ["OPEN", "OPEN cleared", "SHORT", "SHORT cleared", "ALARM OVERCURRENT"])
-            self.assertEqual(log.events[2].pins, "10, 11, 12")
+            self.assertEqual(kinds, ["OPEN", "OPEN cleared", "LOW", "LOW cleared", "SHORT", "SHORT cleared", "ALARM OVERCURRENT"])
+            self.assertEqual(log.events[4].pins, "10, 11, 12")
             with open(os.path.join(d, "s_issues.csv"), encoding="utf-8") as fh:
-                self.assertEqual(len(fh.read().strip().splitlines()), 6)
+                self.assertEqual(len(fh.read().strip().splitlines()), 8)

@@ -44,6 +44,7 @@ class IssueLog:
     def reset_state(self) -> None:
         self._open: Dict[int, int] = {}            # pin -> cycle it went open
         self._over: Dict[int, int] = {}
+        self._low: Dict[int, int] = {}
         self._shorts: Dict[FrozenSet[int], int] = {}   # group -> cycle first seen
 
     # ---- file -------------------------------------------------------------
@@ -89,6 +90,14 @@ class IssueLog:
         elif d.flag != "OVER" and p in self._over:
             since = self._over.pop(p)
             self.add(d.cycle, "info", "OVER RANGE cleared", str(p), f"pin {p} back in range (since cycle {since})")
+
+        if d.flag == "LOW" and p not in self._low:
+            self._low[p] = d.cycle
+            self.add(d.cycle, "warning", "LOW", str(p),
+                     f"pin {p} reads {d.r_mohm:.2f} mOhm, below any real contact: pins shorted together")
+        elif d.flag != "LOW" and p in self._low:
+            since = self._low.pop(p)
+            self.add(d.cycle, "info", "LOW cleared", str(p), f"pin {p} reads normally again (low since cycle {since})")
 
     def on_isolation(self, cycle: int, pairs: Dict[Tuple[int, int], float]) -> None:
         groups = set(short_groups(pairs.keys()))

@@ -43,6 +43,8 @@ class Tracker:
 
     A pin fails after `consecutive` scans in a row that are above `limit_mohm`.
     OVER (above range) and OPEN (no current) readings count as above the limit.
+    LOW readings (below any real contact, fw 0.4) are kept as values and count as bad too:
+    they mean two or more pins are shorted, even if the isolation test is off.
     """
 
     def __init__(self, limit_mohm: float = 10.0, consecutive: int = 3, warn_fraction: float = 0.75):
@@ -57,7 +59,7 @@ class Tracker:
 
     def add(self, d: Data) -> None:
         st = self.pins[d.pin]
-        valid = d.flag in ("OK", "UNDER") and not math.isnan(d.r_mohm)
+        valid = d.flag in ("OK", "UNDER", "LOW") and not math.isnan(d.r_mohm)
         value = d.r_mohm if valid else math.nan
         st.cycles.append(d.cycle)
         st.values.append(value)
@@ -70,12 +72,12 @@ class Tracker:
                 st.initial = value
             st.minimum = min(st.minimum, value)
             st.maximum = max(st.maximum, value)
-        above = d.flag in ("OVER", "OPEN") or (valid and value > self.limit)
+        above = d.flag in ("OVER", "OPEN", "LOW") or (valid and value > self.limit)
         if st.fail_cycle is None:
             st.over_run = st.over_run + 1 if above else 0
             if st.over_run >= self.consecutive:
                 st.fail_cycle = d.cycle
-                st.fail_reason = {"OPEN": "open", "OVER": "above range"}.get(d.flag, f"above {self.limit:g} mOhm")
+                st.fail_reason = {"OPEN": "open", "OVER": "above range", "LOW": "too low (possible short)"}.get(d.flag, f"above {self.limit:g} mOhm")
         self.last_cycle = max(self.last_cycle, d.cycle)
 
     def end_isolation(self, cycle: int, pairs) -> List[frozenset]:
@@ -116,7 +118,7 @@ class Tracker:
             return "fail"
         if not st.cycles:
             return "none"
-        if st.short_with:
+        if st.short_with or st.latest_flag == "LOW":
             return "short"
         if st.latest_flag == "OPEN":
             return "open"

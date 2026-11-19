@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Optional, Union
 
 NPINS = 16
-FLAGS = ("OK", "OVER", "UNDER", "OPEN")
+FLAGS = ("OK", "OVER", "UNDER", "OPEN", "LOW")
 
 
 @dataclass(frozen=True)

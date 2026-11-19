@@ -24,9 +24,10 @@ lines end with `\n`. Fields are comma-separated. Lines starting with `#` are fre
 - `OK`: valid reading
 - `OVER`: INA333 output at the top rail. R is above range: set JP1 to G = 11 and send `GAIN 11`.
 - `UNDER`: INA333 output at the bottom rail (below about 1 mΩ at G = 101)
+- `LOW` (fw 0.4+): calibrated R below 0.8 mΩ, lower than any real contact: two or more pins are shorted. The app logs it and counts it toward the fail rule.
 - `OPEN`: test current below 0.2 A: contact open, connector not mated, or ribbon unplugged. R and Rmin are sent as `nan`.
 
-**Shorted pins** read *lower* than normal in the DATA lines (the shorted contacts carry current in parallel), so they are found by the isolation test, not by the resistance limit: the kit drives each pin in turn and checks that no other pin's contact carries current.
+**Shorted pins** read *lower* than normal in the DATA lines (the shorted contacts carry current in parallel), so they are found by the isolation test, not by the resistance limit: the kit drives each pin in turn and checks that no other pin's contact carries current (fw 0.4: more than 50 µV above that channel's current-off baseline = SHORT; this also catches all 16 pins shorted together).
 
 ## Laptop → ESP32
 

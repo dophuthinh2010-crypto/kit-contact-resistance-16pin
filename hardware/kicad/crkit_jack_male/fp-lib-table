@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "crkit")(type "KiCad")(uri "${KIPRJMOD}/../crkit.pretty")(options "")(descr "CR-TEST footprints"))
+)

@@ -1,0 +1,51 @@
+timestamp,cycle,severity,type,pins,detail
+2026-11-19T07:42:12,11,warning,LOW,1,"pin 1 reads 0.20 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,2,"pin 2 reads 0.20 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,3,"pin 3 reads 0.20 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,4,"pin 4 reads 0.20 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,5,"pin 5 reads 0.19 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,6,"pin 6 reads 0.19 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,7,"pin 7 reads 0.19 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,8,"pin 8 reads 0.19 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,9,"pin 9 reads 0.20 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,10,"pin 10 reads 0.19 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,11,"pin 11 reads 0.20 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,12,"pin 12 reads 0.20 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,13,"pin 13 reads 0.20 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,14,"pin 14 reads 0.19 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,15,"pin 15 reads 0.19 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,warning,LOW,16,"pin 16 reads 0.20 mOhm, below any real contact: pins shorted together"
+2026-11-19T07:42:12,11,critical,SHORT,"1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16","pins 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 and 16 are shorted together (isolation test: up to 132 µV on an undriven pin). Their resistance readings show the contacts in parallel and read low."
+2026-11-19T07:42:12,13,critical,FAIL,1,pin 1 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,2,pin 2 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,3,pin 3 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,4,pin 4 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,5,pin 5 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,6,pin 6 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,7,pin 7 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,8,pin 8 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,9,pin 9 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,10,pin 10 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,11,pin 11 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,12,pin 12 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,13,pin 13 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,14,pin 14 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,15,pin 15 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,13,critical,FAIL,16,pin 16 failed at cycle 13: too low (possible short)
+2026-11-19T07:42:12,21,info,LOW cleared,1,pin 1 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,2,pin 2 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,3,pin 3 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,4,pin 4 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,5,pin 5 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,6,pin 6 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,7,pin 7 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,8,pin 8 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,9,pin 9 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,10,pin 10 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,11,pin 11 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,12,pin 12 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,13,pin 13 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,14,pin 14 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,15,pin 15 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,LOW cleared,16,pin 16 reads normally again (low since cycle 11)
+2026-11-19T07:42:12,21,info,SHORT cleared,"1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16","pins 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 isolated again (short since cycle 11)"

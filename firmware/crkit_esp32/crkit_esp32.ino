@@ -15,7 +15,7 @@
 #include <Adafruit_ADS1X15.h>
 #include <Preferences.h>
 
-#define FW_VERSION "0.3.0"
+#define FW_VERSION "0.4.0"
 
 // ---------------- pin map (docs/design.md) ----------------
 const int PIN_SR_DATA  = 23;   // 74HC595 SER
@@ -36,7 +36,9 @@ const float INA_RAIL_HI    = 3.20f;    // V, above this the INA333 output is cli
 const float INA_RAIL_LO    = 0.06f;    // V, below this the INA333 output is clipped
 const float I_OPEN_LIMIT   = 0.20f;    // A, below this the contact is treated as open
 const float I_OVER_LIMIT   = 0.75f;    // A, above this the force path bypasses R_LO (short to GND): switch off
-const float ISO_LIMIT_UV   = 150.0f;   // uV on an undriven pin's contact = that pin is shorted to the driven one
+const float ISO_LIMIT_UV   = 50.0f;    // uV on an undriven pin's contact (above its own current-off baseline) = shorted to the driven pin.
+                                       // 16 pins all shorted give only ~85-110 uV, so 150 uV (fw 0.3) missed that case.
+const float R_LOW_LIMIT    = 0.8f;     // mOhm, a reading below this is not a real contact: flag LOW (possible short)
 const float V5_MIN = 4.6f, V5_MAX = 5.4f;
 // Board rev B: INA333 REF sits at ~0.25 V (buffered divider), read on ADS1115 AIN3, so the
 // amplifier can show contact voltages down to zero. On a rev A board (REF = GND) AIN3 reads ~0.
@@ -145,6 +147,7 @@ Reading measurePin(int p, float v0, float v5) {
   if (rd.i < I_OPEN_LIMIT)      rd.flag = "OPEN";
   else if (vi >= INA_RAIL_HI)   rd.flag = "OVER";
   else if (vi <= INA_RAIL_LO)   rd.flag = "UNDER";
+  else if (rd.r < R_LOW_LIMIT)  rd.flag = "LOW";    // below any real contact: two or more pins shorted
   else                          rd.flag = "OK";
   return rd;
 }
@@ -157,6 +160,18 @@ void isolationTest(float v0, float v5) {
   int found = 0;
   bool seen[NPINS][NPINS] = {};
   float sens = ACS_SENS_5V * (v5 / 5.0f);
+  // Baseline: every channel's reading with the current off. Subtracting it removes the INA333
+  // offset (up to 25 uV) and thermal EMFs, which matter now that the limit is 50 uV.
+  float base[NPINS];
+  shiftPins(0);
+  digitalWrite(PIN_I_EN, LOW);
+  for (int b = 0; b < NPINS; b++) {
+    selectMux(b);
+    delayMicroseconds(200);
+    float acc = 0;
+    for (int k = 0; k < 4; k++) acc += ads.computeVolts(ads.readADC_SingleEnded(1));
+    base[b] = (acc / 4 - vRef) / inaGain * 1e6f;
+  }
   for (int a = 0; a < NPINS && !alarmed; a++) {
     shiftPins(1u << a);
     delay(1);
@@ -173,7 +188,9 @@ void isolationTest(float v0, float v5) {
         if (b == a) continue;
         selectMux(b);
         delayMicroseconds(200);
-        float uv = (ads.computeVolts(ads.readADC_SingleEnded(1)) - vRef) / inaGain * 1e6f;
+        float vs = 0;
+        for (int k = 0; k < 2; k++) vs += ads.computeVolts(ads.readADC_SingleEnded(1));
+        float uv = (vs / 2 - vRef) / inaGain * 1e6f - base[b];
         if (uv > ISO_LIMIT_UV) {
           int lo = min(a, b), hi = max(a, b);
           if (!seen[lo][hi]) {

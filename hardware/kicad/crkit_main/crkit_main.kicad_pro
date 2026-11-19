@@ -1,0 +1,452 @@
+{
+  "board": {
+    "design_settings": {
+      "rules": {
+        "min_clearance": 0.2,
+        "min_track_width": 0.2,
+        "min_via_diameter": 0.5,
+        "min_through_hole_diameter": 0.3,
+        "min_copper_edge_clearance": 0.4,
+        "min_hole_to_hole": 0.25
+      }
+    }
+  },
+  "meta": {
+    "filename": "crkit_main.kicad_pro",
+    "version": 1
+  },
+  "net_settings": {
+    "classes": [
+      {
+        "name": "Default",
+        "clearance": 0.2,
+        "track_width": 0.25,
+        "via_diameter": 0.6,
+        "via_drill": 0.3,
+        "diff_pair_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "diff_pair_via_gap": 0.25,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "wire_width": 6,
+        "bus_width": 12,
+        "line_style": 0,
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 2147483647
+      },
+      {
+        "name": "Power",
+        "clearance": 0.3,
+        "track_width": 1.0,
+        "via_diameter": 1.0,
+        "via_drill": 0.5,
+        "diff_pair_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "diff_pair_via_gap": 0.25,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "wire_width": 6,
+        "bus_width": 12,
+        "line_style": 0,
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 0
+      },
+      {
+        "name": "Sense",
+        "clearance": 0.2,
+        "track_width": 0.25,
+        "via_diameter": 0.6,
+        "via_drill": 0.3,
+        "diff_pair_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "diff_pair_via_gap": 0.25,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "wire_width": 6,
+        "bus_width": 12,
+        "line_style": 0,
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 1
+      }
+    ],
+    "meta": {
+      "version": 3
+    },
+    "netclass_patterns": [
+      {
+        "netclass": "Power",
+        "pattern": "F_BUS"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "LO_RTN"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "I_HI"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "ACS_IP"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "+5V"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "VIN_RAW"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "VIN_P"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "GND"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF1"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF2"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF3"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF4"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF5"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF6"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF7"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF8"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF9"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF10"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF11"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF12"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF13"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF14"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF15"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "MF16"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF1"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF2"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF3"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF4"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF5"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF6"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF7"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF8"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF9"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF10"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF11"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF12"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF13"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF14"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF15"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SF16"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM1"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM2"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM3"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM4"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM5"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM6"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM7"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM8"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM9"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM10"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM11"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM12"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM13"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM14"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM15"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SM16"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC1"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC2"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC3"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC4"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC5"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC6"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC7"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC8"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC9"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC10"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC11"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC12"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC13"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC14"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC15"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SFC16"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC1"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC2"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC3"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC4"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC5"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC6"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC7"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC8"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC9"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC10"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC11"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC12"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC13"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC14"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC15"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SMC16"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SENSE_F"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SENSE_M"
+      }
+    ]
+  },
+  "schematic": {
+    "legacy_lib_dir": "",
+    "legacy_lib_list": []
+  },
+  "sheets": [
+    [
+      "aaee5f10-ff58-59f2-8dad-e919923808f2",
+      "Root"
+    ]
+  ],
+  "text_variables": {}
+}
