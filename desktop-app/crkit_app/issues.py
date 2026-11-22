@@ -86,7 +86,7 @@ class IssueLog:
         if d.flag == "OVER" and p not in self._over:
             self._over[p] = d.cycle
             self.add(d.cycle, "warning", "OVER RANGE", str(p),
-                     f"pin {p} resistance above the amplifier range: set JP1 to G11 and send GAIN 11")
+                     f"pin {p} resistance above the measuring range (about 400 mOhm on rev C; on rev A/B set JP1 to G11 and send GAIN 11)")
         elif d.flag != "OVER" and p in self._over:
             since = self._over.pop(p)
             self.add(d.cycle, "info", "OVER RANGE cleared", str(p), f"pin {p} back in range (since cycle {since})")

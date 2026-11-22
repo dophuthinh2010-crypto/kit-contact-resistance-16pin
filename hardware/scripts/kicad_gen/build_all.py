@@ -21,10 +21,10 @@ for d in ("crkit_main", "crkit_jack_female", "crkit_jack_male"):
     kgen.write_lib_tables(os.path.join(KICAD, d))
 os.makedirs(os.path.join(KICAD, "preview"), exist_ok=True)
 preview.board_png(os.path.join(KICAD, "preview", "main_board_placement.png"), parts, (main_board.W, main_board.H), main_board.HOLES,
-                  "CR-TEST main board rev B, 135 x 90 mm")
+                  "CR-TEST main board rev C, 135 x 101 mm")
 preview.schematic_png(os.path.join(KICAD, "preview", "main_board_schematic.png"), parts, main_board.BLOCKS,
-                      title="CR-TEST main board rev B schematic (generated)")
+                      title="CR-TEST main board rev C schematic (generated)")
 for name, ps in (("female", jf), ("male", jm)):
     preview.board_png(os.path.join(KICAD, "preview", f"jack_{name}_placement.png"), ps, (jack_board.W, jack_board.H), jack_board.HOLES,
-                      f"CR-TEST jack board ({name}) rev B, 80 x 40 mm")
+                      f"CR-TEST jack board ({name}) rev C, 80 x 40 mm")
 print("libraries:", len(syms), "symbols,", len(fps), "footprints")

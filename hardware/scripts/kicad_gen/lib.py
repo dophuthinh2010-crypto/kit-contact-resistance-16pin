@@ -177,3 +177,29 @@ F_PLUG = mcmurdo("McMurdo_RedRange_Plug_16way_RP16-T", False)
 F_SOCKET = mcmurdo("McMurdo_RedRange_Socket_16way_RS16P-T", True)
 F_MH = Fp("MountingHole_3.2mm_M3", [Pad("", "np_thru_hole", "circle", 0, 0, 3.2, 3.2, 3.2)], (-1.6, -1.6, 1.6, 1.6), "M3 mounting hole",
           through_hole=True, pin1_mark=False)
+
+# ----------------------------------------------------------------------------- rev C parts
+S_4053 = Sym("CD4053B", [("12", "AX"), ("13", "AY"), ("2", "BX"), ("1", "BY"), ("5", "CX"), ("3", "CY"), None, ("11", "A"), ("10", "B"), ("9", "C"), ("6", "INH")],
+             [("14", "A COM"), ("15", "B COM"), ("4", "C COM"), None, ("16", "VDD"), ("7", "VEE"), ("8", "VSS")], ref="U", width=12.7,
+             descr="Triple SPDT analog switch: control 0 = X, 1 = Y; INH high = all off")
+S_LM317 = Sym("LM317T", [("3", "IN")], [("2", "OUT"), ("1", "ADJ")], ref="U", width=10.16,
+              descr="Adjustable regulator, used as a constant-current source: I = 1.25 V / R_SET")
+
+
+def dip(name, n, row=7.62, descr=""):
+    h = n // 2
+    pads = []
+    for i in range(h):
+        pads.append(Pad(str(i + 1), "thru_hole", "rect" if i == 0 else "oval", 0, i * 2.54, 1.6, 1.6, 0.8))
+        pads.append(Pad(str(n - i), "thru_hole", "oval", row, i * 2.54, 1.6, 1.6, 0.8))
+    L = (h - 1) * 2.54
+    return Fp(name, pads, (0.8, -1.27, row - 0.8, L + 1.27), descr, through_hole=True)
+
+
+F_DIP16 = dip("DIP-16_W7.62mm", 16, descr="DIP-16 300 mil (CD4053BE)")
+F_TO220 = Fp("TO-220-3_Vertical_Heatsink", [Pad("1", "thru_hole", "rect", 0, 0, 1.9, 2.2, 1.2), Pad("2", "thru_hole", "oval", 2.54, 0, 1.9, 2.2, 1.2),
+                                             Pad("3", "thru_hole", "oval", 5.08, 0, 1.9, 2.2, 1.2)],
+             (-2.46, -3.2, 7.54, 12.0), "TO-220 vertical, area includes a clip-on heatsink behind the tab (about 10 x 13 mm)", through_hole=True)
+F_2512 = Fp("R_2512_6332Metric_Shunt", [Pad("1", "smd", "roundrect", -3.1, 0, 1.6, 3.4), Pad("2", "smd", "roundrect", 3.1, 0, 1.6, 3.4)],
+            (-3.15, -1.6, 3.15, 1.6), "2512 current shunt. Route the ADC taps from the inner edge of each pad (Kelvin)", pin1_mark=False)
+F_R3W = axial("R_Axial_3W_L15.5mm_P20.32mm", 20.32, 1.0, 2.0, 15.5, 5.5, "3 W metal-oxide resistor, mount 2 mm off the board")

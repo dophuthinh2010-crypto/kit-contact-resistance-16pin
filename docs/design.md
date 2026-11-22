@@ -3,36 +3,51 @@
 The full design (with the BOM and block diagram) lives in the Claude doc:
 https://claude.ai/artifact/T8kFqe1HFXj3PjpiL8ypHh. This file copies the key decisions for review.
 
-## Measurement path
+## Measurement path (board rev C)
 
 ```
-+5V -> Q_EN (AO3401A) -> R_HI 5.6 Ω 5 W -> ACS712-05B -> F_BUS (all female force lines)
-    -> female pin n -> CONTACT n -> male pin n -> Qn (AO3400A) -> LO_RTN -> R_LO 2.2 Ω 5 W -> GND
++5V -> Q_EN (AO3401A) -> LM317T IN
+       LM317T OUT -> R_SET 2.0 Ω 3 W -> ADJ = F_BUS (all female force lines)       constant 0.625 A
+    -> female pin n -> CONTACT n -> male pin n -> Qn (AO3400A) -> LO_RTN -> R_SH 0.1 Ω -> GND
 
-Sense: female pad n -> U4 CD74HC4067 -> INA333 IN+
-       male pad n   -> U5 CD74HC4067 -> INA333 IN-   (G = 1 + 100k/RG = 101)
-       INA333 out -> ADS1115 AIN1;  ACS712 out -> AIN0;  +5V/2 -> AIN2
+Sense: female pad n -> 10 k -> female CD4053B tree (5 chips) -> SENSE_F -> 1 k -> ADS1115 AIN0
+       male pad n   -> 10 k -> male CD4053B tree (5 chips)   -> SENSE_M -> 1 k -> ADS1115 AIN1
+       R_SH Kelvin taps -> 1 k -> ADS1115 AIN2 / AIN3
 ```
 
-Test current ≈ 5 V / (5.6 + 2.2 + 0.3 Ω) ≈ 0.62 A, pulsed about 30 ms per pin.
+The LM317T holds the test current at I = 1.25 V / R_SET = 0.625 A whatever the contact does.
+The ADS1115 reads both voltages differentially at its ±0.256 V range (7.8125 µV per step):
 
 ```
-R_n = (V_CONTACT / G) / I,   I = (V_ACS - V_ACS0) / (0.185 * V_5V / 5)
+R_n = (V_contact,on − V_contact,off) / I,     I = (V_SH − V_SH,0) / 0.100 Ω
 ```
 
-## Schematic blocks
+- The current-off reading of the same channel removes the ADC offset and thermal EMF.
+- Resolution 7.8 µV / 0.625 A = **0.0125 mΩ per step**; range up to about 400 mΩ (`OVER` above that).
+- Each sense line sees about 11 kΩ (10 k + four CD4053B switches + 1 k) against the ADS1115's
+  710 kΩ differential input, which reads about 3 % low. This is a fixed scale error: **run `CALREF`
+  with a 4-terminal reference shunt once per kit.**
+- Headroom: the LM317T needs about 1.25 V + 1.7–2.5 V dropout; at 5 V that leaves 1.1–1.9 V for the
+  path (normally about 0.16 V). If the current falls below 0.55 A the firmware prints a warning.
+- Heat: the LM317T drops about 3.5 V × 0.625 A ≈ 2.2 W while a pin is on. A clip-on TO-220 heatsink
+  keeps it near 60 °C at the duty cycle of a scan; R_SET dissipates 0.78 W.
 
-1. **Power:** J1 5 V 2 A barrel → F1 2 A polyfuse → D1 SMBJ5.0A → 470 µF → `+5V`.
-   U7 AP2112K-3.3 → `+3V3A` (muxes, INA333, ADS1115, 74HC595).
+## Schematic blocks (KiCad references in brackets)
+
+1. **Power:** J1 5 V 2 A barrel → Q1 reverse-polarity P-MOSFET → F1 2 A polyfuse → D2 SMBJ5.0A → C1 470 µF → `+5V`.
+   U1 AP2112K-3.3 → `+3V3A` (muxes, ADS1115, 74HC595).
    The ESP32-DevKitC is powered from the laptop USB only: its 5V header pin is **not** connected to `+5V`
-   (Espressif: power the DevKitC from exactly one source). Only GND is shared between the DevKitC and the main board.
-2. **Current source:** Q_EN P-MOSFET switched by Q_DRV 2N7002 from `I_EN`. R_HI → ACS712 IP+ → IP− = `F_BUS`.
-3. **Pin select:** Q1–Q16 AO3400A, drain = male force line n, source = `LO_RTN`. Gates are driven by
-   2 × 74HC595 (100 Ω series, 100 kΩ pulldown). /OE has a pull-up, so all switches are off at boot. R_LO lifts the contact to about 1.4 V.
-4. **Sense muxes:** U4 (female) / U5 (male) CD74HC4067, shared S0–S3 and /E. 1 kΩ + BAT54S clamp on each input.
-5. **Amplifier:** INA333, RG = 1.00 kΩ (G = 101, about 51 mΩ full scale) or 10.0 kΩ (G = 11, about 470 mΩ) via JP1.
-   100 pF per input, 10 nF across the inputs, 1 kΩ/100 nF output filter.
-6. **ADC:** ADS1115 at 0x48. AIN0 = I_SENSE, AIN1 = V_CONTACT, AIN2 = +5V/2, AIN3 = INA333 REF (rev B, about 0.25 V).
+   (Espressif: power the DevKitC from exactly one source). Only GND is shared.
+2. **Current source:** Q3 (Q_EN) P-MOSFET switched by Q2 2N7002 from `I_EN`, feeding U2 LM317T.
+   R4 = R_SET 2.0 Ω 3 W, R5 = R_SH 0.1 Ω 1 % 2512.
+3. **Pin select:** Q4–Q19 AO3400A (contact n = Q(n+3)), drain = male force line n, source = `LO_RTN`.
+   Gates from 2 × 74HC595 (U3, U4; 100 Ω series, 100 kΩ pulldown). /OE has a pull-up, so all switches are off at boot.
+4. **Sense inputs:** 10 kΩ in every sense line (R38–R69), 3.3 kΩ bleeder on `+3V3A`.
+5. **Sense muxes:** two 16-to-1 trees of CD4053BE (U5–U9 female, U10–U14 male), 15 switches each:
+   level 1 (8 switches) on S0, level 2 (4) on S1, level 3 (2) on S2, level 4 (1) on S3, so channel n is
+   still binary n−1. All INH pins = `MUX_EN` (pull-up: everything off at boot). VDD = +3V3A, VEE = VSS = GND.
+6. **ADC:** U15 ADS1115 at 0x48. AIN0−AIN1 = contact (1 kΩ each, 100 nF across, BAT54S clamps),
+   AIN2−AIN3 = R_SH Kelvin taps (1 kΩ each, 100 nF across). 5 V monitor: 10k/10k divider to ESP32 IO34.
 7. **I/O:** J4 mate-detect switch (cycle counter), LED, J5 I²C spare, test points.
 
 ## ESP32 pin map (DevKitC V4, WROOM-32E)
@@ -43,8 +58,9 @@ R_n = (V_CONTACT / G) / I,   I = (V_ACS - V_ACS0) / (0.185 * V_5V / 5)
 | 18 | SR_CLK | 74HC595 SRCLK |
 | 5 | SR_LATCH | 74HC595 RCLK |
 | 19 | SR_OE | 74HC595 /OE (pull-up) |
-| 25, 26, 27, 14 | MUX_S0..S3 | 4067 select |
-| 13 | MUX_EN | 4067 /E (pull-up) |
+| 25, 26, 27, 14 | MUX_S0..S3 | CD4053B tree levels 1–4 |
+| 13 | MUX_EN | CD4053B INH, all ten (pull-up) |
+| 34 | V5_MON | 5 V rail ÷ 2 (ADC1, input only) |
 | 32 | I_EN | test current on |
 | 21 / 22 | SDA / SCL | ADS1115, J5 |
 | 4 | ADC_RDY | ADS1115 ALERT/RDY |
@@ -53,7 +69,7 @@ R_n = (V_CONTACT / G) / I,   I = (V_ACS - V_ACS0) / (0.185 * V_5V / 5)
 
 ## IDC 34-way pinout (J2 female, J3 male, same on each breakout)
 
-Odd pin 2n−1 = force n, even pin 2n = sense n (n = 1..16). Pins 33 and 34 = GND.
+Odd pin 2n−1 = force n, even pin 2n = sense n (n = 1..16). Pins 33 and 34 are not connected (rev B on).
 
 ## Connector (RP16-T plug / RS16P-T socket)
 
@@ -64,38 +80,41 @@ Odd pin 2n−1 = force n, even pin 2n = sense n (n = 1..16). Pins 33 and 34 = GN
 - Ratings: 5 A all contacts, 5 mΩ max initially / 10 mΩ after conditioning, 500 operations,
   0.8–2.3 N per contact pair.
 
-## KiCad (rev B)
+## KiCad (rev C)
 
 Schematic and placed PCB for the main board and both jack boards are in `hardware/kicad/`
-(generated by `hardware/scripts/kicad_gen/`). The main board grew to 135 × 90 mm for rev B.
-KiCad references differ from the names used here: see the map in `hardware/kicad/README.md`.
+(generated by `hardware/scripts/kicad_gen/`). Main board rev C is 135 × 101 mm.
 
 ## Fault protection
 
-Shorted pins are current-limited by R_HI + R_LO (≤ 0.63 A) and found by the isolation test after each scan. Rev B changes (REF offset, 10 kΩ sense resistors, reverse-polarity MOSFET, 10 W R_HI, ACS712 output clamp, ribbon pins 33/34 unconnected): see `docs/fault-protection.md`.
+The LM317T limits every fault current to 0.625 A, including a force line shorted to GND (rev B needed
+a 10 W R_HI for that case). Shorted pins are found by the isolation test after each scan and by the
+`LOW` flag. Details: `docs/fault-protection.md`.
 
 ## Layout rules
 
 - Main board: 2-layer, 2 oz, solid GND bottom. Zones: power (left), switching (centre), analog + MCU (right).
-- Force paths ≥ 1.0 mm. `F_BUS` and `LO_RTN` are pours. R_LO return goes to the J1 star ground.
-- Sense lines 0.25 mm over unbroken GND. SENSE_F/SENSE_M run as a tight, equal-length pair under 20 mm.
+- Force paths ≥ 1.0 mm. `F_BUS` and `LO_RTN` are pours. R_SH goes to the J1 star ground; its two ADC taps are separate Kelvin traces.
+- Sense lines 0.25 mm over unbroken GND. SENSE_F/SENSE_M run as a tight pair to the ADS1115. Keep the LM317T heatsink away from the mux trees (thermal EMF).
 - Breakouts: force trace (1.0 mm) and sense trace (0.25 mm) leave each pad on opposite sides.
 
-## Firmware scan (per mating)
+## Firmware scan (per mating, firmware 0.5.0)
 
 1. Wait for MATE_DET + 200 ms, then add 1 to the cycle counter.
-2. Read the ACS712 zero with all switches off.
-3. For each pin: select the mux, turn on Qn, set I_EN high, wait 5 ms, read AIN0/AIN1 (8 samples each), switch off.
-4. Send `DATA,cycle,pin,I_A,V_mV,R_mOhm,flag,Rmin`. Flags: OPEN (I < 0.2 A), OVER, UNDER, LOW (R < 0.8 mΩ, pins shorted).
+2. Read the shunt offset (all switches off) and the 5 V rail (IO34).
+3. For each pin: select the mux, read the contact channel with no current (4 samples), turn on Qn and I_EN,
+   wait 3 ms, read contact and shunt 8 times each, switch off.
+4. Send `DATA,cycle,pin,I_A,V_mV,R_mOhm,flag,Rmin`. Flags: OPEN (I < 0.2 A), OVER (V > 0.25 V), LOW (R < 0.8 mΩ, pins shorted).
 5. Isolation test: drive each pin, read every other pin against its current-off baseline; above 50 µV = SHORT.
 
-Calibration: 10 mΩ 4-terminal shunt (gain), shorted bar (zero per channel), DMM (current).
+About 2.5 s per scan with the isolation test (ADS1115 at 475 samples/s).
+Calibration: 4-terminal reference shunt (CALREF, gain), shorted bar (CALZERO, zero per channel).
 
 ## Open items
 
-- [ ] Test current: keep 0.62 A, or a 100 mA dry-circuit test (EIA-364-23)?
+- [ ] Test current: keep 0.625 A, or a 100 mA dry-circuit test (EIA-364-23)? With rev C this is one resistor: R_SET = 12.4 Ω
 - [ ] Failure limit (proposed R > 10 mΩ, keep cycling past 500)
 - [ ] Cycle method: manual or actuator
 - [ ] Logging: USB serial, or Wi-Fi/SD
-- [ ] Current accuracy: ACS712 gives about ±2–3% after averaging; a precision shunt would need a second ADC (AIN3 now reads the INA333 REF)
+- [x] Current accuracy: rev C measures the current on a 0.1 Ω 1 % shunt with the same ADC (ratiometric)
 - [ ] Verify the footprint against a real RP16-T / RS16P-T sample before ordering PCBs

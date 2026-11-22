@@ -102,11 +102,11 @@ async function icon(Comp, color, size = 256) {
   s = pres.addSlide({ masterName: "Content", sectionTitle: "Design" });
   s.addText("Kelvin 4-wire sensing resolves milliohms", { placeholder: "title" });
   const steps = [
-    [fa.FaBolt, "Force current", "5 V through R_HI 5.6 Ω + R_LO 2.2 Ω ≈ 0.627 A, switched per pin by AO3400A + 74HC595"],
-    [fa.FaRandom, "Select taps", "Two CD74HC4067 muxes pick the sense taps on both sides of the contact"],
-    [fa.FaSlidersH, "Amplify", "INA333, gain 101 (or 11) lifts the µV contact voltage"],
-    [fa.FaMicrochip, "Digitise", "ADS1115 reads I (ACS712, AIN0) and V (AIN1), 16-bit"],
-    [fa.FaCalculator, "Compute", "R = V / I. Range 0–51 mΩ at gain 101"],
+    [fa.FaBolt, "Force current", "LM317T + 2.0 Ω R_SET hold 0.625 A; AO3400A + 74HC595 pick the pin"],
+    [fa.FaRandom, "Select taps", "Ten CD4053BE in two 16-to-1 trees pick both Kelvin taps"],
+    [fa.FaMicrochip, "Read V directly", "ADS1115 AIN0−1 at ±0.256 V: 7.8 µV per step, no amplifier"],
+    [fa.FaSlidersH, "Read I", "0.1 Ω shunt on AIN2−3, same ADC, so R is ratiometric"],
+    [fa.FaCalculator, "Compute", "R = (V on − V off) / I: 0.0125 mΩ per step, up to ~400 mΩ"],
   ];
   for (let i = 0; i < steps.length; i++) {
     const x = 0.6 + i * 2.48;
@@ -116,13 +116,13 @@ async function icon(Comp, color, size = 256) {
     txt(s, steps[i][2], { x: x + 0.2, y: 3.35, w: 1.95, h: 2.1, fontSize: 14, color: C.text2 });
   }
   txt(s, "Sense wires carry no current, so lead and trace resistance drop out of the reading.", { x: 0.6, y: 5.95, w: 12, h: 0.5, fontSize: 16, italic: true, color: C.accent1 });
-  s.addNotes("ACS712 alone cannot resolve milliohms, which is why the INA333 voltage path was added. Both ADC channels are read so R is ratiometric to the measured current.");
+  s.addNotes("Board rev C. The current-off reading of each channel removes the ADC offset and thermal EMF. The mux and filter resistance loads the ADC input by about 3 %, a fixed scale error removed once with CALREF and a 4-terminal reference shunt.");
 
   // 5 ── Hardware
   s = pres.addSlide({ masterName: "Content", sectionTitle: "Design" });
   s.addText("Three boards and a slide fixture", { placeholder: "title" });
   const boards = [
-    [fa.FaServer, "Main board 100 × 80 mm", "Current source, pin switches, muxes, INA333, ADS1115, ESP32-DevKitC socket"],
+    [fa.FaServer, "Main board rev C, 135 × 101 mm", "LM317T current source, 16 pin switches, 10× CD4053BE, ADS1115, ESP32-DevKitC socket"],
     [fa.FaPlug, "Jack boards 80 × 40 mm", "Plug and socket on PC-tail footprints, 34-way IDC: odd = force, even = sense"],
     [fa.FaArrowsAltH, "Slide fixture", "Rail pushes the plug into the socket, mate switch on GPIO33 detects full insertion"],
   ];
@@ -148,11 +148,12 @@ async function icon(Comp, color, size = 256) {
   s.addText("Firmware scans, checks and reports every cycle", { placeholder: "title" });
   card(s, 0.6, 1.55, 5.9, 4.3, "Firmware card");
   await badge(s, fa.FaMicrochip, 0.85, 1.8);
-  txt(s, "ESP32 firmware 0.3.0", { x: 1.65, y: 1.9, w: 4.6, h: 0.45, fontSize: 18, bold: true });
+  txt(s, "ESP32 firmware 0.5.0", { x: 1.65, y: 1.9, w: 4.6, h: 0.45, fontSize: 18, bold: true });
   txt(s, [
     { text: "Scans 16 pins, 8 samples each, keeps the minimum R", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "Isolation test finds shorts: drive pin a, read others (150 µV limit)", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "Cuts current above 0.75 A, alarms if 5 V leaves 4.6–5.4 V", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "Current-off reading per pin cancels offset and thermal EMF", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "Isolation test (50 µV) and LOW flag find shorts, all 16 pins included", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "Alarms above 0.75 A (LM317T fault) or 5 V outside 4.6–5.4 V", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
     { text: "Calibration and settings kept in NVS", options: { bullet: true } },
   ], { x: 0.85, y: 2.65, w: 5.4, h: 3.7, fontSize: 15 });
   card(s, 6.8, 1.55, 5.9, 4.3, "Protocol card");
@@ -162,7 +163,7 @@ async function icon(Comp, color, size = 256) {
     { text: "Kit → app", options: { bold: true, breakLine: true } },
     { text: "HELLO · CYCLE · DATA · SHORT · ISO · ALARM · END", options: { fontFace: "Courier New", fontSize: 13, breakLine: true, paraSpaceAfter: 12 } },
     { text: "App → kit", options: { bold: true, breakLine: true } },
-    { text: "SCAN · MEASURE · SETCYCLE · GAIN · AUTO · ISO · CALZERO · CALREF", options: { fontFace: "Courier New", fontSize: 13, breakLine: true, paraSpaceAfter: 12 } },
+    { text: "SCAN · MEASURE · SETCYCLE · AUTO · ISO · CALZERO · CALREF", options: { fontFace: "Courier New", fontSize: 13, breakLine: true, paraSpaceAfter: 12 } },
     { text: "Plain-text lines, so any terminal can drive the kit too.", options: { color: C.text2 } },
   ], { x: 7.05, y: 2.65, w: 5.4, h: 3.7, fontSize: 15 });
   s.addNotes("Full protocol is in docs/serial-protocol.md.");
@@ -183,7 +184,7 @@ async function icon(Comp, color, size = 256) {
     txt(s, h, { x: 9.15, y, w: 3.6, h: 0.4, fontSize: 17, bold: true, color: C.accent1 });
     txt(s, d, { x: 9.15, y: y + 0.4, w: 3.6, h: 0.65, fontSize: 14, color: C.text2 });
   });
-  txt(s, "Python + PySide6 · one-click install.bat · 23 unit tests", { x: 0.6, y: 1.65 + ah, w: aw, h: 0.4, fontSize: 13, color: C.accent5 });
+  txt(s, "Python + PySide6 · one-click install.bat · 25 unit tests", { x: 0.6, y: 1.65 + ah, w: aw, h: 0.4, fontSize: 13, color: C.accent5 });
   s.addNotes("Screenshot is the app on the bench PC after the fault-scenario run.");
 
   // 8 ── Test sequence
@@ -232,48 +233,47 @@ async function icon(Comp, color, size = 256) {
 
   // 10 ── Fault scenarios
   s = pres.addSlide({ masterName: "Content", sectionTitle: "Results" });
-  s.addText("All four fault scenarios were detected and logged", { placeholder: "title" });
+  s.addText("All five fault scenarios were detected and logged", { placeholder: "title" });
   const hdr = (t) => ({ text: t, options: { bold: true, color: HEX.paper, fill: { color: HEX.slate }, fontSize: 14 } });
   const ok = { text: "Detected", options: { bold: true, color: "2E8B57" } };
   s.addTable([
     [hdr("Scenario"), hdr("Example in run"), hdr("How it shows"), hdr("Result")],
-    ["1 pin open", "Pin 5 from cycle 9", "OPEN event, FAIL after 3 scans (cycle 11)", ok],
-    ["2+ pins open", "Pins 2 and 9", "OPEN on each pin, both FAIL at cycle 19", ok],
-    ["2 pins shorted", "Pins 4–5", "Isolation test: SHORT 4–5, FAIL at cycle 27", ok],
-    ["3+ pins shorted", "Pins 10–11–12", "SHORT group, FAIL at cycle 35, cleared when removed", ok],
-  ], { x: 0.6, y: 1.6, w: 12.1, colW: [2.4, 2.6, 5.3, 1.8], fontSize: 14, color: HEX.ink, fontFace: "Calibri", border: { type: "solid", color: HEX.grid, pt: 1 }, rowH: 0.62, valign: "middle", margin: [0, 0.12, 0, 0.12] });
+    ["1 pin open", "Pin 5", "OPEN event, FAIL after 3 scans", ok],
+    ["2+ pins open", "Pins 2, 9, 14", "OPEN on each pin, all three FAIL", ok],
+    ["2 pins shorted", "Pins 4–5", "Isolation test: SHORT 4–5, both FAIL", ok],
+    ["3+ pins shorted", "Pins 10–11–12", "One SHORT group, R 3 → 1 mΩ, all FAIL", ok],
+    ["All 16 shorted", "Pins 1–16", "SHORT group of 16 + LOW flag (R 0.2 mΩ)", ok],
+  ], { x: 0.6, y: 1.5, w: 12.1, colW: [2.4, 2.6, 5.3, 1.8], fontSize: 14, color: HEX.ink, fontFace: "Calibri", border: { type: "solid", color: HEX.grid, pt: 1 }, rowH: 0.55, valign: "middle", margin: [0, 0.12, 0, 0.12] });
   await badge(s, fa.FaClipboardList, 0.6, 5.2);
-  txt(s, "Every event goes to the Issues tab and to <session>_issues.csv, with time, cycle, severity and pins.", { x: 1.45, y: 5.25, w: 11.2, h: 0.6, fontSize: 15, valign: "middle" });
+  txt(s, "Rev C simulator: fault applied at cycle 11, every scenario FAILs at cycle 13; no false alarms. Events go to the Issues tab and <session>_issues.csv.", { x: 1.45, y: 5.25, w: 11.2, h: 0.6, fontSize: 15, valign: "middle" });
   txt(s, "Shorts make R read low, so they are caught by the isolation test, not the R limit.", { x: 1.45, y: 5.9, w: 11.2, h: 0.5, fontSize: 15, italic: true, color: C.accent1 });
 
   // 11 ── Protection review
   s = pres.addSlide({ masterName: "Content", sectionTitle: "Results" });
-  s.addText("Pin shorts are safe today; rev B closes the remaining gaps", { placeholder: "title" });
+  s.addText("Rev C: the LM317T caps every fault at 0.625 A", { placeholder: "title" });
   card(s, 0.6, 1.55, 5.9, 4.3, "Gaps card");
   await badge(s, fa.FaExclamationTriangle, 0.85, 1.8, 0.62, C.accent3);
-  txt(s, "Rev A findings", { x: 1.65, y: 1.9, w: 4.6, h: 0.45, fontSize: 18, bold: true });
+  txt(s, "What rev A/B had to patch", { x: 1.65, y: 1.9, w: 4.6, h: 0.45, fontSize: 18, bold: true });
   txt(s, [
-    { text: "Pin-to-pin shorts limited to ≤ 0.63 A by design", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "Force-to-GND short: 0.89 A, 4.46 W in R_HI (fw cuts off > 0.75 A)", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "Open pin back-feeds 22 mA into +3V3A", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "No reverse-polarity protection, no ACS712 clamp", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "Shorts of 3+ pins hard to see with REF = 0 V", options: { bullet: true } },
+    { text: "Force-to-GND short: 0.89 A, 4.46 W in R_HI", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "Open pin back-feed into +3V3A through 32 clamps", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "INA333 needed a 0.25 V REF to see big shorts", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "ACS712 current to only ±2–3 %", options: { bullet: true } },
   ], { x: 0.85, y: 2.65, w: 5.4, h: 3.7, fontSize: 15 });
   card(s, 6.8, 1.55, 5.9, 4.3, "Fixes card");
   await badge(s, fa.FaShieldAlt, 7.05, 1.8, 0.62, C.accent4);
-  txt(s, "Rev B changes", { x: 7.85, y: 1.9, w: 4.6, h: 0.45, fontSize: 18, bold: true });
+  txt(s, "Rev C, by design", { x: 7.85, y: 1.9, w: 4.6, h: 0.45, fontSize: 18, bold: true });
   txt(s, [
-    { text: "INA333 REF ≈ 0.25 V, read on AIN3: sees shorts of 3–8+ pins", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "10 kΩ sense resistors + bleeder: back-feed 22 → 2.2 mA", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "Reverse-polarity P-MOSFET at the 5 V input", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "R_HI 5 W → 10 W, BAT54S clamp on ACS712 output", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
-    { text: "Leave IDC pins 33/34 unconnected", options: { bullet: true } },
+    { text: "Any short, even to GND: still 0.625 A, 2.3 W in the LM317T", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "10 kΩ into 3.3 V muxes: back-feed < 0.1 mA", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "ADC reads down to 0 V directly: no REF trick", options: { bullet: true, breakLine: true, paraSpaceAfter: 8 } },
+    { text: "Current from a 1 % shunt; Q1 blocks a reversed adapter", options: { bullet: true } },
   ], { x: 7.05, y: 2.65, w: 5.4, h: 3.7, fontSize: 15 });
-  s.addNotes("Details and worst-case numbers are in docs/fault-protection.md.");
+  s.addNotes("Details and worst-case numbers are in docs/fault-protection.md. The firmware still switches off above 0.75 A, which now only happens if the LM317T itself fails short.");
 
   // 12 ── BOM
   s = pres.addSlide({ masterName: "Content", sectionTitle: "Results" });
-  s.addText("About $150 per kit, with two supply risks", { placeholder: "title" });
+  s.addText("About $156 per kit, with two things to watch", { placeholder: "title" });
   const g = Object.entries(data.groups).sort((a, b) => b[1] - a[1]);
   s.addChart(pres.charts.BAR, [{ name: "Cost (USD)", labels: g.map((x) => x[0]), values: g.map((x) => x[1]) }], {
     x: 0.6, y: 1.5, w: 7.6, h: 5.2, barDir: "bar",
@@ -283,12 +283,12 @@ async function icon(Comp, color, size = 256) {
     catAxisOrientation: "maxMin", valAxisMaxVal: 60, valAxisLabelFormatCode: "$0", valGridLine: { color: HEX.grid, size: 0.75 }, catGridLine: { style: "none" }, barGapWidthPct: 50,
   });
   card(s, 8.6, 1.55, 4.1, 1.9, "Total card");
-  txt(s, "$" + 148.39, { x: 8.85, y: 1.75, w: 3.6, h: 0.9, fontSize: 44, bold: true, color: C.accent1, fontFace: "Cambria" });
+  txt(s, "$156.22", { x: 8.85, y: 1.75, w: 3.6, h: 0.9, fontSize: 44, bold: true, color: C.accent1, fontFace: "Cambria" });
   txt(s, "per kit, 40 BOM lines", { x: 8.85, y: 2.75, w: 3.6, h: 0.4, fontSize: 14, color: C.text2 });
   await badge(s, fa.FaExclamationTriangle, 8.6, 3.85, 0.55, C.accent3);
   txt(s, [{ text: "RP16 / RS16 stock", options: { bold: true, breakLine: true } }, { text: "Listed as no longer stocked at element14: buy test samples early", options: { color: C.text2 } }], { x: 9.35, y: 3.82, w: 3.35, h: 1.2, fontSize: 14 });
   await badge(s, fa.FaExclamationTriangle, 8.6, 5.25, 0.55, C.accent3);
-  txt(s, [{ text: "ACS712 is NRND", options: { bold: true, breakLine: true } }, { text: "ACS723 is the drop-in alternative in the BOM", options: { color: C.text2 } }], { x: 9.35, y: 5.22, w: 3.35, h: 1.2, fontSize: 14 });
+  txt(s, [{ text: "LM317T heat", options: { bold: true, breakLine: true } }, { text: "About 2.2 W per pulse: fit the clip-on heatsink", options: { color: C.text2 } }], { x: 9.35, y: 5.22, w: 3.35, h: 1.2, fontSize: 14 });
   s.addNotes("Full BOM with suppliers and alternatives: hardware/BOM.xlsx.");
 
   // 13 ── Next steps
@@ -297,7 +297,7 @@ async function icon(Comp, color, size = 256) {
   s.addText("Next steps", { placeholder: "title" });
   s.addText("From simulation to the first real 500-cycle life test", { placeholder: "body" });
   const nx = [
-    [fa.FaDraftingCompass, "Finish rev B schematic and layout in KiCad"],
+    [fa.FaDraftingCompass, "Open rev C in KiCad: ERC, DRC, route"],
     [fa.FaIndustry, "Order PCBs, connector samples and parts from the BOM"],
     [fa.FaTools, "Assemble, calibrate with a reference shunt"],
     [fa.FaChartLine, "Run 500 cycles on real RP16 pairs and compare to the datasheet"],

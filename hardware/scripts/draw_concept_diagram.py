@@ -35,12 +35,12 @@ def label(x, y, s, color=MUTED, size=9.5, ha="center", **kw):
 # ---- title
 ax.text(4, 96, "CR-TEST  ·  16-pin contact resistance test kit", fontsize=20, fontweight="bold", color=INK, va="center")
 ax.text(4, 92.2, "System concept: 4-wire (Kelvin) resistance of every mated contact of an ITW McMurdo RP16-T / RS16P-T, "
-                 "scanned once per plug/unplug cycle", fontsize=11, color=MUTED, va="center")
+                 "scanned once per plug/unplug cycle  (main board rev C)", fontsize=11, color=MUTED, va="center")
 
 # ---- band 1: control and data
 lap = box(6, 70, 26, 14, "Laptop", "CR-TEST desktop app\nCSV log · live charts · issues")
 esp = box(54, 70, 30, 14, "ESP32-DevKitC", "scan sequencer\nserial protocol · calibration")
-adc = box(108, 70, 24, 14, "ADS1115", "16-bit ADC, I²C\nAIN0 I · AIN1 V · AIN2 5 V")
+adc = box(108, 70, 24, 14, "ADS1115", "16-bit, differential ±0.256 V\nAIN0−1 contact · AIN2−3 shunt")
 wire([(lap["r"], 77), (esp["l"], 77)], INK, 1.6, arrow=False)
 label(43, 79.2, "USB serial  115200 Bd", INK, 9.5)
 label(43, 74.8, "USB powers the ESP32 only", MUTED, 8.5)
@@ -51,12 +51,12 @@ label(96, 79.2, "I²C", SENSE, 9.5)
 y2, h2, w2 = 44, 13, 16
 xs = [4, 25, 46, None, None, 118, 139]
 psu = box(4, y2, w2, h2, "5 V / 2 A", "adapter → J1\nfuse · TVS")
-rhi = box(25, y2, w2, h2, "Q_EN + R_HI", "5.6 Ω 5 W\nsets ≈0.62 A")
-acs = box(46, y2, w2, h2, "ACS712", "Hall sensor\ncurrent I")
+rhi = box(25, y2, w2, h2, "Q_EN", "P-MOSFET\ncurrent on / off")
+acs = box(46, y2, w2, h2, "LM317T", "+ R_SET 2.0 Ω\nconstant 0.625 A")
 fem = box(68, y2 - 3, 17, h2 + 6, "Female jack", "RS16P-T\n16 contacts", fill="#fff4ea", edge=DUT)
 mal = box(95, y2 - 3, 17, h2 + 6, "Male jack", "RP16-T\n16 contacts", fill="#fff4ea", edge=DUT)
 fet = box(118, y2, w2, h2, "Q1 … Q16", "pin select\nAO3400A ×16")
-rlo = box(139, y2, 17, h2, "R_LO → GND", "2.2 Ω 5 W")
+rlo = box(139, y2, 17, h2, "R_SH → GND", "0.1 Ω shunt\ncurrent I")
 for a, b in [(psu, rhi), (rhi, acs), (acs, fem)]:
     wire([(a["r"], a["cy"]), (b["l"], b["cy"])], FORCE, 3.2)
 wire([(mal["r"], mal["cy"]), (fet["l"], fet["cy"])], FORCE, 3.2)
@@ -66,20 +66,19 @@ for i, yy in enumerate([47.5, 50.5, 53.5]):
     ax.add_line(Line2D([fem["r"], mal["l"]], [yy, yy], color=DUT, lw=2.4, zorder=1))
 label((fem["r"] + mal["l"]) / 2, 61.6, "mated contact n", DUT, 9.5, fontweight="bold")
 label((fem["r"] + mal["l"]) / 2, 42.6, "× 16", DUT, 9.5)
-label(41.5, 59.6, "TEST CURRENT  (pulsed ≈25 ms per pin)", FORCE, 9.5, fontweight="bold")
+label(41.5, 59.6, "TEST CURRENT  0.625 A  (pulsed ≈40 ms per pin)", FORCE, 9.5, fontweight="bold")
 
 # ---- band 3: Kelvin sense path
-mux = box(68, 16, 44, 12, "Sense muxes  2 × CD74HC4067", "pick the Kelvin taps of pin n on both jacks")
-ina = box(118, 16, 18, 12, "INA333", "× 101 (JP1: × 11)\ncontact voltage V")
+mux = box(68, 16, 44, 12, "Sense muxes  10 × CD4053BE", "two 16-to-1 trees: Kelvin taps of pin n on both jacks")
 wire([(fem["cx"], fem["b"]), (fem["cx"], mux["t"])], SENSE, 1.6)
 wire([(mal["cx"], mal["b"]), (mal["cx"], mux["t"])], SENSE, 1.6)
 label(fem["cx"] - 1.5, 34.5, "sense F", SENSE, 9, ha="right")
 label(mal["cx"] + 1.5, 34.5, "sense M", SENSE, 9, ha="left")
-wire([(mux["r"], mux["cy"]), (ina["l"], ina["cy"])], SENSE, 1.6)
-wire([(ina["r"], ina["cy"]), (158, ina["cy"]), (158, 65), (124, 65), (124, adc["b"])], SENSE, 1.6)
-label(125.5, 67.4, "AIN1", SENSE, 9, ha="left")
-wire([(50, acs["t"]), (50, 67), (114, 67), (114, adc["b"])], SENSE, 1.6)
-label(112.5, 68.6, "AIN0", SENSE, 9, ha="right")
+wire([(mux["r"], mux["cy"]), (115, mux["cy"]), (115, adc["b"])], SENSE, 1.6)
+label(116.3, 33, "AIN0−AIN1\ncontact V", SENSE, 9, ha="left")
+wire([(rlo["cx"], rlo["t"]), (rlo["cx"], 66), (128, 66), (128, adc["b"])], SENSE, 1.6)
+label(129.3, 67.6, "AIN2−AIN3", SENSE, 9, ha="left")
+ax.text(118, 20, "No amplifier:\nthe ADS1115 resolves\n7.8 µV = 0.0125 mΩ\nat 0.625 A", fontsize=9.5, color=MUTED, va="center", linespacing=1.35)
 
 # ---- control lines from the ESP32 (dashed)
 wire([(62, esp["b"]), (62, 64.8), (rhi["cx"], 64.8), (rhi["cx"], rhi["t"])], CTRL, 1.3, dashed=True)
@@ -94,8 +93,8 @@ wire([(52, 68.8), (52, 72.5), (esp["l"], 72.5)], CTRL, 1.3, dashed=True)
 label(21.5, 36, "GPIO33", CTRL, 9, ha="right")
 
 # ---- result formula and legend
-ax.text(4, 5.5, "R(pin n) = V / I    ·    range 0–51 mΩ at × 101    ·    fail limit 10 mΩ    ·    "
-                "isolation test after each scan finds shorted pins", fontsize=10.5, color=INK)
+ax.text(4, 5.5, "R(pin n) = (V_on − V_off) / I,   I = V_SH / 0.1 Ω    ·    up to ~400 mΩ    ·    fail limit 10 mΩ    ·    "
+                "isolation test finds shorted pins", fontsize=10.5, color=INK)
 lx, ly = 104, 6.2
 for i, (c, lw, ds, txt) in enumerate([(FORCE, 3.2, False, "test current"), (SENSE, 1.6, False, "sense / analog"),
                                       (CTRL, 1.3, True, "control / digital"), (DUT, 2.4, False, "device under test")]):

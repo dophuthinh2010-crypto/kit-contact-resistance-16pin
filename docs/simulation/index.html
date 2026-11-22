@@ -166,15 +166,15 @@ input[type="range"] { accent-color: var(--accent); }
       </label>
       <label for="current">Test current
         <select id="current">
-          <option value="hi" selected>0.62 A (as designed)</option>
-          <option value="lo">0.10 A dry circuit</option>
+          <option value="hi" selected>0.625 A (R_SET 2.0 Ω)</option>
+          <option value="lo">0.10 A dry circuit (R_SET 12.4 Ω)</option>
         </select>
       </label>
-      <label for="gain">INA333 gain (JP1)
+      <label for="gain">ADS1115 range
         <select id="gain">
-          <option value="11">G = 11</option>
-          <option value="101" selected>G = 101</option>
-          <option value="1001">G = 1001</option>
+          <option value="256" selected>±0.256 V (7.8 µV/step)</option>
+          <option value="512">±0.512 V (15.6 µV/step)</option>
+          <option value="1024">±1.024 V (31 µV/step)</option>
         </select>
       </label>
       <label for="limit">Fail limit <span class="val" id="limit-v">10.0 mΩ</span>
@@ -193,12 +193,12 @@ input[type="range"] { accent-color: var(--accent); }
     <h2>Measurement chain · pin <span id="c-pin">1</span></h2>
     <table class="chain">
       <tr><td>True contact resistance</td><td>wear model</td><td id="c-rt">–</td></tr>
-      <tr><td>Test current</td><td>5 V / (R_HI + R_LO + path)</td><td id="c-it">–</td></tr>
-      <tr><td>ACS712 output</td><td>2.5 V + 185 mV/A</td><td id="c-va">–</td></tr>
-      <tr><td>Measured current</td><td>(V − V₀) / 0.185</td><td id="c-im">–</td></tr>
+      <tr><td>Test current</td><td>LM317T: 1.25 V / R_SET</td><td id="c-it">–</td></tr>
+      <tr><td>Shunt voltage</td><td>I × 0.1 Ω, ADS AIN2−3</td><td id="c-va">–</td></tr>
+      <tr><td>Measured current</td><td>V_SH / 0.1 Ω</td><td id="c-im">–</td></tr>
       <tr><td>Contact voltage</td><td>I × R</td><td id="c-vc">–</td></tr>
-      <tr><td>INA333 output</td><td>G × V, 0.05–3.25 V</td><td id="c-vi">–</td></tr>
-      <tr><td>ADS1115 code</td><td>125 µV / LSB</td><td id="c-code">–</td></tr>
+      <tr><td>ADS1115 input</td><td>via CD4053B trees, AIN0−1</td><td id="c-vi">–</td></tr>
+      <tr><td>ADS1115 code</td><td id="c-lsb">7.8 µV / LSB</td><td id="c-code">–</td></tr>
       <tr class="result"><td>Measured R</td><td id="c-err">error</td><td id="c-rm">–</td></tr>
     </table>
   </section>
@@ -224,7 +224,7 @@ input[type="range"] { accent-color: var(--accent); }
 
   <section>
     <h2>Model assumptions</h2>
-    <p class="note">Start resistance 2.2–3.5 mΩ (datasheet: 5 mΩ max new). Wear R = R₀ + A·(N/500)^1.6 with A ≈ 3 mΩ per pin (one weaker pin), plus random fretting spikes that grow more likely with cycles. Noise: ACS712 ≈ 4 mV rms (averaged), INA333 offset and noise after calibration, ADS1115 quantisation. Replace the wear model with your logged data once the kit runs.</p>
+    <p class="note">Start resistance 2.2–3.5 mΩ (datasheet: 5 mΩ max new). Wear R = R₀ + A·(N/500)^1.6 with A ≈ 3 mΩ per pin (one weaker pin), plus random fretting spikes that grow more likely with cycles. Board rev C chain: LM317T 0.625 A source, 0.1 Ω shunt, CD4053B mux trees, ADS1115 at ±0.256 V (≈2 µV rms noise, 7.8 µV steps), offset removed by a current-off reading, mux loading removed by CALREF. Replace the wear model with your logged data once the kit runs.</p>
   </section>
 </aside>
 
@@ -261,24 +261,28 @@ function trueR(p, n) {        // mΩ
 }
 function config() {
   const lo = $("current").value === "lo";
-  return { rhi: lo ? 33 : 5.6, rlo: lo ? 15 : 2.2, G: +$("gain").value };
+  const fsr = +$("gain").value / 1000;                     // ADS1115 full scale, V
+  return { rset: lo ? 12.4 : 2.0, fsr, lsb: fsr / 32768 };
 }
-const LSB = 125e-6;
-const q = v => Math.round(v / LSB) * LSB;
+// Board rev C: LM317T constant-current source, 0.1 Ω shunt, CD4053B mux trees, ADS1115 differential.
+const RSH = 0.1, ATTEN = 0.969, CAL = 1 / ATTEN;           // mux + filter resistance against the ADS input, removed by CALREF
+const qz = (v, lsb, fsr) => Math.min(fsr - lsb, Math.max(-fsr, Math.round(v / lsb) * lsb));
 function measure(p, n) {
-  const { rhi, rlo, G } = config();
+  const { rset, fsr, lsb } = config();
   const rt = trueR(p, n);
   const Ri = rt / 1000;
-  const It = 5 / (rhi + rlo + 0.03 + 0.15 + Ri);
-  const v0 = q(2.5 + gauss() * 0.004 / 4);              // zero read, 16 samples
-  const va = q(2.5 + 0.185 * It + gauss() * 0.004 / Math.sqrt(8));
-  const Im = (va - v0) / 0.185;
+  const It = 1.25 * (1 + 0.004) / rset;                     // this kit's LM317T reference is 0.4 % high
+  const off = 6e-6;                                         // ADC offset + thermal EMF, cancelled by the current-off read
+  const vOff = qz(off + gauss() * 2e-6 / 2, lsb, fsr);
+  const nz = () => gauss() * 2e-6 / Math.sqrt(8);
+  const va = qz(It * RSH + nz(), lsb, fsr);                 // shunt voltage
+  const Im = va / RSH;
   const vc = It * Ri;
-  let vi = G * (vc + gauss() * 1.5e-6 + 0.8e-6) + gauss() * 0.0003;
-  const clipHi = vi >= 3.25, clipLo = vi <= 0.05;
-  vi = q(Math.min(3.25, Math.max(0.05, vi)));
-  const rm = (vi / G) / Im * 1000;
-  return { rt, It, va, Im, vc, vi, code: Math.round(vi / LSB), rm, clipHi, clipLo, G };
+  let vi = vc * ATTEN + off + nz();
+  const clipHi = vi >= fsr * 0.976, clipLo = false;
+  vi = qz(vi, lsb, fsr);
+  const rm = (vi - vOff) * CAL / Im * 1000;
+  return { rt, It, va, Im, vc, vi, code: Math.round(vi / lsb), rm, clipHi, clipLo, lsb };
 }
 
 // ================= 3D scene =================
@@ -465,14 +469,15 @@ function renderChain() {
   $("c-pin").textContent = selected + 1;
   $("c-rt").textContent = fmt(m.rt, 3) + " mΩ";
   $("c-it").textContent = fmt(m.It, 4) + " A";
-  $("c-va").textContent = fmt(m.va, 4) + " V";
+  $("c-va").textContent = fmt(m.va * 1000, 3) + " mV";
+  $("c-lsb").textContent = fmt(m.lsb * 1e6, 1) + " µV / LSB";
   $("c-im").textContent = fmt(m.Im, 4) + " A";
   $("c-vc").textContent = m.vc < 1e-3 ? fmt(m.vc * 1e6, 1) + " µV" : fmt(m.vc * 1e3, 3) + " mV";
-  $("c-vi").textContent = fmt(m.vi, 4) + " V" + (m.clipHi ? " ⚠ over" : m.clipLo ? " ⚠ under" : "");
+  $("c-vi").textContent = fmt(m.vi * 1000, 4) + " mV" + (m.clipHi ? " ⚠ over" : "");
   $("c-code").textContent = m.code;
   $("c-rm").textContent = (m.clipHi ? "> " : m.clipLo ? "< " : "") + fmt(m.rm, 3) + " mΩ";
   const err = (m.rm - m.rt) / m.rt * 100;
-  $("c-err").textContent = m.clipHi ? "over range: lower the gain" : m.clipLo ? "under range: raise the gain" : `error ${err >= 0 ? "+" : ""}${err.toFixed(1)} %`;
+  $("c-err").textContent = m.clipHi ? "over range: pick a wider ADS1115 range" : `error ${err >= 0 ? "+" : ""}${err.toFixed(1)} %`;
 }
 
 // chart

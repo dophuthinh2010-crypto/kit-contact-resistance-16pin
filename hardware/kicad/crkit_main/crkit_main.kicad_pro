@@ -86,11 +86,11 @@
       },
       {
         "netclass": "Power",
-        "pattern": "I_HI"
+        "pattern": "LM_IN"
       },
       {
         "netclass": "Power",
-        "pattern": "ACS_IP"
+        "pattern": "LM_OUT"
       },
       {
         "netclass": "Power",
@@ -435,6 +435,134 @@
       {
         "netclass": "Sense",
         "pattern": "SENSE_M"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "ADS_F"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "ADS_M"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SH_P"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "SH_N"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L1_0"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L1_1"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L1_2"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L1_3"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L1_4"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L1_5"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L1_6"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L1_7"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L2_0"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L2_1"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L2_2"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L2_3"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L3_0"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "F_L3_1"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L1_0"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L1_1"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L1_2"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L1_3"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L1_4"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L1_5"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L1_6"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L1_7"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L2_0"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L2_1"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L2_2"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L2_3"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L3_0"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "M_L3_1"
       }
     ]
   },

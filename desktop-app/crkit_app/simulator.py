@@ -3,6 +3,8 @@
 Lets you try the app without hardware: pick "Simulator" as the port. It behaves like
 the firmware (commands, replies, scans) and runs a plug/unplug cycle every few seconds.
 Contact wear follows an assumed model, the same one as docs/simulation/index.html.
+Measurement physics follow main board rev C: LM317T constant-current source (0.625 A),
+CD4053B mux trees, ADS1115 differential at +-0.256 V for the contact and for the 0.1 ohm shunt.
 """
 from __future__ import annotations
 
@@ -23,7 +25,7 @@ class SimulatedKit:
         self._out: deque = deque()
         self._lock = threading.Lock()
         self.is_open = True
-        self.gain = 101
+        self.gain = 16             # ADS1115 PGA gain, fixed on rev C
         self.auto = True
         self.cycle = 0
         self.interval = cycle_interval_s
@@ -36,7 +38,10 @@ class SimulatedKit:
         self.r0 = [2.2 + self._rng.random() * 1.3 for _ in range(16)]
         self.a = [6.2 if i == 10 else 3.0 * math.exp(self._rng.gauss(0, 0.22)) for i in range(16)]
         self.zero = [0.0] * 16
-        self.gcorr = 1.0
+        self.gcorr = 1 / self.ATTEN   # as after CALREF: mux and filter resistance loading calibrated out
+        self.i_set = 1.25 * (1 + self._rng.gauss(0, 0.008)) / 2.0   # this kit's LM317T current, about 0.625 A
+        self.ch_off = [self._rng.uniform(-12e-6, 12e-6) for _ in range(16)]   # ADS offset + thermal EMF per channel, V
+        self.sh_off = self._rng.uniform(-10e-6, 10e-6)
         self._emit("# CR-TEST kit ready (simulator). Send STATUS, SCAN or MEASURE.")
         self._hello()
 
@@ -76,7 +81,7 @@ class SimulatedKit:
             self._out.append(s)
 
     def _hello(self) -> None:
-        self._emit(f"HELLO,CRKIT,0.4.0-sim,{self.gain},{self.cycle}")
+        self._emit(f"HELLO,CRKIT,0.5.0-sim,{self.gain},{self.cycle}")
 
     def _true_r(self, p: int, n: int) -> float:
         r = self.r0[p] + self.a[p] * (n / 500) ** 1.6
@@ -84,11 +89,19 @@ class SimulatedKit:
             r += 0.5 + self._rng.random() * 3
         return r
 
-    # ---- measurement physics -------------------------------------------------
-    REF = 0.25            # V, INA333 REF offset (board rev B)
+    # ---- measurement physics (board rev C) -----------------------------------
+    LSB = 0.256 / 32768   # V, ADS1115 at +-0.256 V
+    ATTEN = 0.969         # 2 x (10 k + 4 x CD4053B Ron + 1 k) against the ADS1115 710 k differential input
+    R_SH = 0.100          # ohm, shunt
     R_SHORT = 0.0005      # ohm, resistance of an injected pin-to-pin short
-    ISO_LIMIT_UV = 50.0   # isolation test (fw 0.4): contact voltage above its current-off baseline = short
+    ISO_LIMIT_UV = 50.0   # isolation test: contact voltage above its current-off baseline = short
     R_LOW_LIMIT = 0.8     # mOhm, readings below this are flagged LOW (possible short)
+
+    def _adc(self, v: float) -> float:
+        """One ADS1115 differential reading at +-0.256 V: noise, quantisation, clipping."""
+        v = v + self._rng.gauss(0, 2.0e-6)
+        v = round(v / self.LSB) * self.LSB
+        return min(0.256 - self.LSB, max(-0.256, v))
 
     def _groups(self) -> dict:
         out = {}
@@ -105,70 +118,67 @@ class SimulatedKit:
         cond = 1 / r[p] + sum(1 / (r[m] + self.R_SHORT) for m in g if m != p and m not in self.open_pins)
         return 1 / cond
 
-    def _ina(self, v_contact: float, offset_v: float = 0.0) -> float:
-        vi = self.REF + self.gain * (v_contact + offset_v + self._rng.gauss(0, 1.5e-6)) + self._rng.gauss(0, 0.0008)
-        return min(3.25, max(0.05, vi))
-
     def _scan(self, trigger: str, count: bool, only_pin: int = -1) -> list:
         if count:
             self.cycle += 1
         n = max(self.cycle, 0)
         self._emit(f"CYCLE,{self.cycle},{trigger}")
         v5 = 5.0 + self._rng.gauss(0, 0.01)
-        self._emit(f"ZERO,{self.cycle},{2.5 + self._rng.gauss(0, 0.001):.4f},{v5:.3f}")
+        sh_zero = sum(self._adc(self.sh_off) for _ in range(8)) / 8
+        self._emit(f"ZERO,{self.cycle},{sh_zero:.6f},{v5:.3f}")
         r = [self._true_r(p, n) / 1000 for p in range(16)]          # true contact R this cycle, ohm
         groups = self._groups()
         raw = [math.nan] * 16
         for p in range(16):
             if 0 <= only_pin != p:
                 continue
+            off = self.ch_off[p]
+            v_off = sum(self._adc(off) for _ in range(4)) / 4    # current-off reading of this channel
             if p in self.open_pins:
                 reff, i_true = math.nan, 0.0
             else:
                 reff = self._r_eff(p, r, groups)
-                i_true = 5 / (5.6 + 2.2 + 0.18 + reff)
-            samples, i_sum, vi_sum = [], 0.0, 0.0
-            for _ in range(8):                               # 8 readings per pin, like the firmware
-                i_s = i_true + self._rng.gauss(0, 0.004 / 0.185)
-                vi_s = self._ina(0.0 if math.isnan(reff) else i_true * reff)
-                i_sum += i_s; vi_sum += vi_s
+                i_true = self.i_set                              # constant current: independent of the contact
+            samples, vc_sum, vs_sum = [], 0.0, 0.0
+            for _ in range(8):                                   # 8 readings per pin, like the firmware
+                vc_s = self._adc(off + (0.0 if math.isnan(reff) else i_true * reff * self.ATTEN)) - v_off
+                vs_s = self._adc(self.sh_off + i_true * self.R_SH) - sh_zero
+                vc_sum += vc_s; vs_sum += vs_s
+                i_s = vs_s / self.R_SH
                 if i_s > 0.2:
-                    samples.append((vi_s - self.REF) / self.gain / i_s * 1000)
-            i, vi = i_sum / 8, vi_sum / 8
-            vc = (vi - self.REF) / self.gain
+                    samples.append(vc_s / i_s * 1000)
+            vc, i = vc_sum / 8, vs_sum / 8 / self.R_SH
             if i < 0.2:
                 flag, rr, rmin = "OPEN", math.nan, math.nan
             else:
                 raw[p] = vc / i * 1000
                 rr = (raw[p] - self.zero[p]) * self.gcorr
-                flag = "OVER" if vi >= 3.2 else ("UNDER" if vi <= 0.06 else ("LOW" if rr < self.R_LOW_LIMIT else "OK"))
+                flag = "OVER" if vc >= 0.25 else ("LOW" if rr < self.R_LOW_LIMIT else "OK")
                 rmin = (min(samples) - self.zero[p]) * self.gcorr if samples else math.nan
             self._emit(f"DATA,{self.cycle},{p + 1},{i:.4f},{vc * 1000:.4f},{rr:.4f},{flag},{rmin:.4f}")
         if only_pin < 0:
             self._isolation_test(r, groups)
-        self._emit(f"END,{self.cycle},{int(420 / self.speedup)}")
+        self._emit(f"END,{self.cycle},{int(2500 / self.speedup)}")
         return raw
 
     def _isolation_test(self, r: list, groups: dict) -> None:
         """Drive each pin in turn and read every other pin's contact voltage: it must be ~0."""
         found = {}
-        if not hasattr(self, "_mux_offset"):           # INA333 input offset + thermal EMF per channel, up to ~25 uV
-            self._mux_offset = [self._rng.uniform(-25e-6, 25e-6) for _ in range(16)]
-        off = self._mux_offset
-        base = [sum((self._ina(0.0, off[b]) - self.REF) / self.gain for _ in range(4)) / 4 * 1e6 for b in range(16)]
+        off = self.ch_off
+        base = [sum(self._adc(off[b]) for _ in range(4)) / 4 * 1e6 for b in range(16)]
         for a in range(16):
             if a in self.open_pins:
                 continue                                       # no current can flow: nothing to test from here
             reff = self._r_eff(a, r, groups)
-            i_tot = 5 / (5.6 + 2.2 + 0.18 + reff)
+            i_tot = self.i_set
             g = groups.get(a, ())
             for b in range(16):
                 if b == a:
                     continue
                 v = 0.0
                 if b in g and b not in self.open_pins:
-                    v = i_tot * reff / (r[b] + self.R_SHORT) * r[b]
-                uv = sum((self._ina(v, off[b]) - self.REF) / self.gain for _ in range(2)) / 2 * 1e6 - base[b]
+                    v = i_tot * reff / (r[b] + self.R_SHORT) * r[b] * self.ATTEN
+                uv = sum(self._adc(off[b] + v) for _ in range(2)) / 2 * 1e6 - base[b]
                 if uv > self.ISO_LIMIT_UV:
                     key = (min(a, b), max(a, b))
                     found[key] = max(found.get(key, 0.0), uv)
@@ -198,10 +208,7 @@ class SimulatedKit:
             except ValueError:
                 self._emit("ERR,cycle must be a number")
         elif cmd == "GAIN":
-            if arg.strip() in ("11", "101", "1001"):
-                self.gain = int(arg); self._emit("OK,GAIN")
-            else:
-                self._emit("ERR,gain must be 11, 101 or 1001")
+            self._emit("ERR,board rev C has no gain setting: the ADS1115 always runs at +-0.256 V")
         elif cmd == "AUTO":
             self.auto = arg.strip() != "0"; self._emit("OK,AUTO")
         elif cmd == "CALZERO":

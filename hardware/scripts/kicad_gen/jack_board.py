@@ -1,8 +1,8 @@
-"""CR-TEST jack boards (female = RS16P-T socket, male = RP16-T plug), rev B.
+"""CR-TEST jack boards (female = RS16P-T socket, male = RP16-T plug), rev C.
 
 Each contact pad n goes to IDC pin 2n-1 (force) and 2n (sense). Both are the same copper net,
 C<n>; the Kelvin split is done by layout: the force and sense traces leave the pad on opposite
-sides and only meet at the pad. Pins 33/34 are not connected (rev B).
+sides and only meet at the pad. Pins 33/34 are not connected.
 Run:  python jack_board.py
 """
 import os
@@ -13,7 +13,7 @@ import kgen  # noqa: E402
 from kgen import Part  # noqa: E402
 from lib import F_IDC34, F_PLUG, F_SOCKET, S_IDC34, S_PLUG, S_SOCKET  # noqa: E402
 
-REV, DATE = "B", "2026-11-19"
+REV, DATE = "C", "2026-11-23"
 W, H = 80.0, 40.0
 HOLES = [(3.5, 3.5), (76.5, 3.5), (3.5, 36.5), (76.5, 36.5)]
 
@@ -42,7 +42,7 @@ def build(kind):
     pcb = os.path.join(out, project + ".kicad_pcb")
     kgen.write_board(pcb, project, parts, (W, H), holes=HOLES, title=f"CR-TEST jack board {kind}", rev=REV, date=DATE,
                      zones=[dict(net="C1", layer="F.Cu", pts=[(0, 0), (0.1, 0), (0.1, 0.1)])][:0],
-                     texts=[(5, 27.5, f"CR-TEST {kind.upper()} rev B", 1.0), (5, 38.6, "Kelvin: force and sense leave each pad on opposite sides", 0.7)])
+                     texts=[(5, 27.5, f"CR-TEST {kind.upper()} rev C", 1.0), (5, 38.6, "Kelvin: force and sense leave each pad on opposite sides", 0.7)])
     kgen.write_project(os.path.join(out, project + ".kicad_pro"), project,
                        [dict(name="Kelvin", track_width=0.6, clearance=0.25)], [("C*", "Kelvin")])
     kgen.check_sexpr(sch)

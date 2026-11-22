@@ -1,5 +1,28 @@
 # Fault protection review (open and shorted pins)
 
+## Board rev C (current design, 23 Nov 2026)
+
+Rev C replaces the resistive current source with an **LM317T constant-current source** (R_SET 2.0 Ω,
+0.625 A), the sense muxes with **CD4053BE trees**, and reads the contact directly with the **ADS1115**
+(no INA333, no ACS712). Fault by fault:
+
+| Fault | Rev C behaviour | Protected? |
+| --- | --- | --- |
+| 1 or more pins open | No current for that pin: `OPEN` (shunt reads < 0.2 A) | Yes, detected |
+| 2, 3 or all 16 pins shorted | Current stays 0.625 A (set by the LM317T), shared by the shorted contacts. Isolation test (50 µV against a current-off baseline) and the `LOW` flag find it | Yes, inherently, and detected |
+| Force line shorted to GND | The LM317T still delivers only 0.625 A. It drops about 3.6 V, 2.3 W, the same as a normal pulse | **Yes, inherently** (rev B needed a 10 W R_HI and a firmware cut-off) |
+| Open pin pulsed | F_BUS rises to about 3.8 V; the 10 kΩ sense resistors keep the back-feed into +3V3A under 0.1 mA in total, and the 3.3 kΩ bleeder absorbs it | Yes |
+| Reversed adapter | Q1 P-MOSFET blocks it | Yes |
+| LM317T failed short (IN-OUT) | Current set by the path only (several amps possible) | Firmware: above 0.75 A on the shunt → `ALARM OVERCURRENT`, current off within a few ms; F1 polyfuse backs it up |
+| ADC inputs | BAT54S clamps on AIN0/AIN1, 1 kΩ on all four inputs; muxes run from +3V3A behind 10 kΩ | Yes |
+
+Simulated on rev C (firmware 0.5 logic, `desktop-app/tests/run_fault_scenarios.py`): 1 pin open,
+3 pins open, 2, 3 and all 16 pins shorted are all detected at cycle 11 and fail at cycle 13 after
+3 scans in a row; no false alarms in the no-fault run.
+
+The rest of this file is the rev A/B review, kept for history.
+
+
 **Verdict:** shorts between connector pins, any number of them, cannot damage the board. The test
 current comes through R_HI and R_LO, so it stays at about 0.63 A whatever the pins do, and every part
 in the path is rated far above that. Three other faults are not fully covered by board rev A, and are

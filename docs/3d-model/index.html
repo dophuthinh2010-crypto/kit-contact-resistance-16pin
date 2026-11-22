@@ -188,11 +188,11 @@ td:last-child { text-align: right; font-family: var(--mono); font-variant-numeri
 
   <div class="chips">
     <div class="chip"><b>16</b><span>contacts scanned</span></div>
-    <div class="chip"><b>0.62 A</b><span>test current</span></div>
-    <div class="chip"><b>0–51 mΩ</b><span>range at G = 101</span></div>
+    <div class="chip"><b>0.625 A</b><span>LM317T test current</span></div>
+    <div class="chip"><b>0.0125 mΩ</b><span>per ADC step, to ~400 mΩ</span></div>
     <div class="chip"><b>10 mΩ</b><span>fail limit</span></div>
     <div class="chip"><b>500</b><span>rated cycles</span></div>
-    <div class="chip"><b>≈1 s</b><span>per full scan</span></div>
+    <div class="chip"><b>≈2.5 s</b><span>per scan + short test</span></div>
   </div>
 
   <section id="info" aria-live="polite">
@@ -231,7 +231,7 @@ td:last-child { text-align: right; font-family: var(--mono); font-variant-numeri
   <section>
     <h2>Boards</h2>
     <table>
-      <tr><td>Main board, 2-layer, 2 oz</td><td>100 × 80 mm</td></tr>
+      <tr><td>Main board rev C, 2-layer, 2 oz</td><td>135 × 101 mm</td></tr>
       <tr><td>Male jack board (RP16-T)</td><td>80 × 40 mm</td></tr>
       <tr><td>Female jack board (RS16P-T)</td><td>80 × 40 mm</td></tr>
       <tr><td>Ribbon cables, 34-way</td><td>2 × 30 cm</td></tr>
@@ -247,16 +247,15 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 const PARTS = {
   kit:      { ref: "KIT", name: "Complete kit", text: "Main board, two jack boards, two ribbon cables and a plug/unplug fixture on one base plate." },
-  main:     { ref: "PCB-1", name: "Main board", text: "100 × 80 mm, 2-layer, 2 oz copper. Power on the left, pin switches in the middle, analog front end and ESP32 on the right." },
+  main:     { ref: "PCB-1", name: "Main board (rev C)", text: "135 × 101 mm, 2-layer, 2 oz copper. Power and the LM317T current source at the front, ESP32 at the back left, pin switches and ten CD4053BE muxes in the middle, ribbon headers on the fixture side." },
   esp32:    { ref: "MCU", name: "ESP32-DevKitC V4", text: "Runs the scan: selects a pin, pulses the test current, reads the ADC and sends one CSV line per pin over USB." },
-  acs:      { ref: "U1", name: "ACS712-05B current sensor", text: "Hall-effect sensor in the test-current path, 185 mV/A. Gives the current I for R = V / I." },
-  fets:     { ref: "Q1–Q16", name: "Pin select MOSFETs", text: "16 × AO3400A, one per contact. Only one is on at a time, driven by two 74HC595 shift registers." },
-  sr:       { ref: "U2, U3", name: "74HC595 shift registers", text: "Daisy-chained; 16 outputs drive the MOSFET gates. Output enable has a pull-up so all pins stay off at boot." },
-  mux:      { ref: "U4, U5", name: "CD74HC4067 sense muxes", text: "Select the Kelvin sense taps of pin n on the female and male sides." },
-  ina:      { ref: "U6", name: "INA333 amplifier", text: "Amplifies the voltage across the contact by 101 (or 11 with JP1) for the ADC." },
-  adc:      { ref: "U8", name: "ADS1115 16-bit ADC", text: "Reads the contact voltage, the ACS712 output and the 5 V rail over I²C." },
-  res:      { ref: "R_HI, R_LO", name: "5 W wirewound resistors", text: "5.6 Ω and 2.2 Ω set the test current to about 0.62 A and keep the contact at about 1.4 V for the INA333." },
-  power:    { ref: "J1, U7, C1", name: "Power input", text: "5 V 2 A barrel jack, polyfuse, TVS, 470 µF bulk and a 3.3 V LDO for the analog parts." },
+  lm317:    { ref: "U2 + HS1", name: "LM317T current source", text: "Adjustable regulator wired as a constant-current source: 1.25 V across R_SET = 0.625 A into every contact, whatever its resistance. Clip-on heatsink for the ~2.2 W it drops." },
+  fets:     { ref: "Q4–Q19", name: "Pin select MOSFETs", text: "16 × AO3400A, one per contact. Only one is on at a time, driven by two 74HC595 shift registers." },
+  sr:       { ref: "U3, U4", name: "74HC595 shift registers", text: "Daisy-chained; 16 outputs drive the MOSFET gates. Output enable has a pull-up so all pins stay off at boot." },
+  mux:      { ref: "U5–U14", name: "CD4053BE sense muxes (10)", text: "Two 16-to-1 trees of triple 2-way switches, five chips per side: pick the Kelvin sense taps of pin n on the female and male sides. Sense lines only, no test current." },
+  adc:      { ref: "U15", name: "ADS1115 16-bit ADC", text: "Reads the contact voltage directly (AIN0−AIN1) and the shunt voltage (AIN2−AIN3), both differential at ±0.256 V: 7.8 µV per step, 0.0125 mΩ at 0.625 A." },
+  res:      { ref: "R4, R5", name: "R_SET and current shunt", text: "R_SET 2.0 Ω 3 W sets the LM317T current. R_SH 0.1 Ω 1 % (2512) carries the return current; the ADS1115 reads it through Kelvin taps, so I = V / 0.1 Ω." },
+  power:    { ref: "J1, U1, C1", name: "Power input", text: "5 V 2 A barrel jack, polyfuse, TVS, 470 µF bulk and a 3.3 V LDO for the analog parts." },
   idc:      { ref: "J2, J3", name: "34-way IDC headers", text: "One per jack board: odd pins carry the force current, even pins the sense line, for each of the 16 contacts." },
   ribbon:   { ref: "W1, W2", name: "Ribbon cables", text: "34-way, 28 AWG, about 30 cm. Force and sense run on neighbouring wires." },
   male:     { ref: "PCB-2", name: "Male jack board", text: "Holds the RP16-T plug on 7.1 mm standoffs. Each pad has a force trace and a separate sense trace." },
@@ -268,7 +267,7 @@ const PARTS = {
   usb:      { ref: "USB", name: "USB cable (USB-C to Micro-USB)", text: "Data link to the laptop, and the ESP32's only power source. The kit's 5 V adapter powers everything else." },
   sw:       { ref: "J4", name: "Mate-detect microswitch", text: "Closes when the carriage reaches the mated position. Each closure counts one cycle and starts a scan." },
 };
-const LIST = ["main","esp32","acs","fets","sr","mux","ina","adc","res","power","idc","ribbon","male","female","plug","socket","fixture","sw","laptop","usb"];
+const LIST = ["main","esp32","lm317","res","fets","sr","mux","adc","power","idc","ribbon","male","female","plug","socket","fixture","sw","laptop","usb"];
 
 // ---------- renderer / scene ----------
 const stage = document.getElementById("stage");
@@ -344,37 +343,34 @@ function cyl(r, h, mat, x = 0, y = 0, z = 0, seg = 24) {
 
 // ---------- canvas textures ----------
 function mainBoardTexture() {
-  const c = document.createElement("canvas"); c.width = 1000; c.height = 800;
+  // canvas 10 px per mm: x = (X + 67.5) * 10, y = (Z + 50.5) * 10 in board-local mm
+  const c = document.createElement("canvas"); c.width = 1350; c.height = 1010;
   const g = c.getContext("2d");
-  g.fillStyle = "#0f5132"; g.fillRect(0, 0, 1000, 800);
-  // copper traces under mask
-  g.strokeStyle = "#1c6b45"; g.lineCap = "round";
-  g.lineWidth = 14;
-  [[60,650,300,650],[300,650,520,560],[520,560,620,560],[620,560,670,400],[670,400,670,200]].forEach(([a,b,cc,d]) => { g.beginPath(); g.moveTo(a,b); g.lineTo(cc,d); g.stroke(); });
-  g.lineWidth = 3;
-  for (let i = 0; i < 16; i++) { const y = 210 + i * 25; g.beginPath(); g.moveTo(690, y); g.lineTo(790, y); g.lineTo(830, 200 + i * 25); g.stroke(); }
-  for (let i = 0; i < 16; i++) { const y = 210 + i * 25; g.beginPath(); g.moveTo(560, 330 + i * 4); g.lineTo(650, y); g.stroke(); }
-  for (let i = 0; i < 10; i++) { g.beginPath(); g.moveTo(300 + i * 12, 470); g.lineTo(300 + i * 12, 560); g.lineTo(420, 600 + i * 6); g.stroke(); }
-  // pads for IDC headers
-  g.fillStyle = "#c9a14a";
-  // silkscreen
+  const P = (X, Z) => [(X + 67.5) * 10, (Z + 50.5) * 10];
+  g.fillStyle = "#0f5132"; g.fillRect(0, 0, 1350, 1010);
+  g.strokeStyle = "#1c6b45"; g.lineCap = "round"; g.lineJoin = "round";
+  const line = (w, pts) => { g.lineWidth = w; g.beginPath(); pts.forEach(([X, Z], i) => { const [x, y] = P(X, Z); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); };
+  line(16, [[-60, 30], [-46, 30], [-30, 34], [-25, 34]]);                 // +5V to the LM317T
+  line(16, [[-6, 34], [20, 34], [30, 30], [30, 26], [52, 26], [52, 20]]); // F_BUS to J2
+  line(16, [[-8, -20], [-8, 22], [10, 34]]);                               // LO_RTN to the shunt
+  for (let i = 0; i < 16; i++) line(3, [[39.6, -19 + i * 2.5], [44, -19 + i * 2.5]]);
+  for (let i = 0; i < 16; i++) line(3, [[-8, -19 + i * 2.5], [-3, -19 + i * 2.5 + (i % 2 ? 1 : -1)]]);
+  for (let k = 0; k < 5; k++) for (const z of [-12, 12]) line(3, [[2 + k * 8, z + 10.5], [8 + k * 6, 25]]);
   g.fillStyle = "#e8ecef"; g.strokeStyle = "#e8ecef"; g.lineWidth = 2;
   g.font = "600 26px IBM Plex Mono, monospace";
-  g.fillText("CR-TEST MAIN  v0.1", 40, 50);
-  g.font = "18px IBM Plex Mono, monospace";
-  const lbl = (t, x, y) => g.fillText(t, x, y);
-  lbl("J1 5V", 14, 590); lbl("U7", 150, 560); lbl("C1", 70, 520);
-  lbl("R_HI 5.6R 5W", 250, 770); lbl("R_LO 2.2R 5W", 470, 770);
-  lbl("U1 ACS712", 520, 615); lbl("Q1-Q16", 640, 175); lbl("U2", 545, 300); lbl("U3", 545, 500);
-  lbl("U4 4067", 235, 440); lbl("U5 4067", 235, 585); lbl("U6", 418, 470); lbl("U8", 418, 545);
-  lbl("J2 FEMALE", 905, 140); lbl("J3 MALE", 770, 140); lbl("JP1 G101/G11", 330, 650);
-  lbl("J4", 30, 150); lbl("LED1", 120, 150); lbl("TP", 200, 650);
-  g.strokeRect(5, 5, 990, 790);
-  // test points
+  g.fillText("CR-TEST MAIN  rev C", 40, 50);
+  g.font = "17px IBM Plex Mono, monospace";
+  const lbl = (t, X, Z) => { const [x, y] = P(X, Z); g.fillText(t, x, y); };
+  lbl("J1 5V", -66, 40); lbl("U1", -50, 26); lbl("C1", -60, 21); lbl("F1 D2", -50, 37);
+  lbl("U2 LM317T", -34, 31); lbl("R4 R_SET 2.0R", -15, 44); lbl("R5 0.1R", 5, 43);
+  lbl("U3 U4 595", -30, 1); lbl("Q4-Q19", -14, -21);
+  lbl("U5-U9 CD4053 (F)", -1, -23); lbl("U10-U14 CD4053 (M)", -1, 24.5); lbl("U15 ADS1115", 13, 31);
+  lbl("10k x32", 35, -22); lbl("J3 MALE", 41, -28); lbl("J2 FEMALE", 55, -28);
+  lbl("D5", 47, -45); lbl("J4", 56, -48); lbl("TP1-6", -12, 49);
+  g.strokeRect(5, 5, 1340, 1000);
   g.fillStyle = "#c9a14a";
-  for (let i = 0; i < 9; i++) { g.beginPath(); g.arc(200 + i * 26, 670, 6, 0, Math.PI * 2); g.fill(); }
-  // mounting hole rings
-  [[35,35],[965,35],[35,765],[965,765]].forEach(([x,y]) => { g.beginPath(); g.arc(x, y, 26, 0, Math.PI * 2); g.fill(); g.fillStyle = "#11161d"; g.beginPath(); g.arc(x, y, 16, 0, Math.PI * 2); g.fill(); g.fillStyle = "#c9a14a"; });
+  for (let i = 0; i < 6; i++) { const [x, y] = P(-4 + i * 4, 46.5); g.beginPath(); g.arc(x, y, 7, 0, Math.PI * 2); g.fill(); }
+  [[-63.5, -46.5], [63.5, -46.5], [-63.5, 46.5], [63.5, 46.5]].forEach(([X, Z]) => { const [x, y] = P(X, Z); g.beginPath(); g.arc(x, y, 26, 0, Math.PI * 2); g.fill(); g.fillStyle = "#11161d"; g.beginPath(); g.arc(x, y, 16, 0, Math.PI * 2); g.fill(); g.fillStyle = "#c9a14a"; });
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
 }
 function jackBoardTexture(label, sub) {
@@ -398,79 +394,85 @@ function ribbonTexture() {
 }
 
 // ---------- base plate ----------
-const base = box(300, 8, 160, M.aluDark, 0, -4, 0);
+const base = box(340, 8, 160, M.aluDark, -20, -4, 0);
 base.receiveShadow = true;
 scene.add(tag(base, "fixture"));
 // rubber feet
-[[-140,-70],[140,-70],[-140,70],[140,70]].forEach(([x,z]) => scene.add(cyl(6, 4, M.black, x, -10, z)));
+[[-180,-70],[140,-70],[-180,70],[140,70]].forEach(([x,z]) => scene.add(cyl(6, 4, M.black, x, -10, z)));
 
 // ---------- main board ----------
 const MB = new THREE.Group();
-MB.position.set(-75, 12.4, 0);
+MB.position.set(-92.5, 12.4, 0);
 scene.add(MB);
-const pcbBody = box(100, 1.6, 80, M.pcbEdge, 0, 0.8, 0);
+const pcbBody = box(135, 1.6, 101, M.pcbEdge, 0, 0.8, 0);
 MB.add(tag(pcbBody, "main"));
-const silk = new THREE.Mesh(new THREE.PlaneGeometry(100, 80), new THREE.MeshStandardMaterial({ map: mainBoardTexture(), roughness: 0.55 }));
+const silk = new THREE.Mesh(new THREE.PlaneGeometry(135, 101), new THREE.MeshStandardMaterial({ map: mainBoardTexture(), roughness: 0.55 }));
 silk.rotation.x = -Math.PI / 2; silk.position.y = 1.61;
 MB.add(tag(silk, "main"));
 // standoffs
-[[-46.5,-36.5],[46.5,-36.5],[-46.5,36.5],[46.5,36.5]].forEach(([x,z]) => {
+[[-63.5,-46.5],[63.5,-46.5],[-63.5,46.5],[63.5,46.5]].forEach(([x,z]) => {
   MB.add(tag(cyl(2.8, 12.4, M.brass, x, -6.2, z, 6), "main"));
   MB.add(tag(cyl(2.9, 1.2, M.steel, x, 2.2, z, 6), "main"));
 });
 const T = 1.6; // board top (local y)
 
-// power zone
+// power zone (front left)
 const pwr = new THREE.Group();
-pwr.add(box(14, 11, 9, M.black, -43, T + 5.5, 25));          // barrel jack
-pwr.add(cyl(2.2, 6, M.steel, -50.5, T + 6, 25).rotateZ(Math.PI / 2));
-const c1 = cyl(4, 12, M.cap, -40, T + 6, 9); pwr.add(c1);
-pwr.add(cyl(4.02, 1, M.steel, -40, T + 12, 9));
-pwr.add(box(3, 1.2, 3, M.ic, -34, T + 0.6, 17));             // LDO
-pwr.add(box(4.5, 2.5, 3.2, M.grey, -34, T + 1.25, 30));      // polyfuse
-pwr.add(box(4.5, 2.2, 3.6, M.ic, -27, T + 1.1, 30));         // TVS
+pwr.add(box(14, 11, 9, M.black, -60, T + 5.5, 30));          // barrel jack
+pwr.add(cyl(2.2, 6, M.steel, -67.5, T + 6, 30).rotateZ(Math.PI / 2));
+pwr.add(cyl(4, 12, M.cap, -56, T + 6, 15));
+pwr.add(cyl(4.02, 1, M.steel, -56, T + 12, 15));
+pwr.add(box(3, 1.2, 3, M.ic, -46, T + 0.6, 22));             // LDO
+pwr.add(box(4.5, 2.5, 3.2, M.grey, -47, T + 1.25, 34));      // polyfuse
+pwr.add(box(4.5, 2.2, 3.6, M.ic, -40, T + 1.1, 34));         // TVS
 MB.add(tag(pwr, "power"));
 
-// wirewound resistors on raised legs
+// LM317T, vertical TO-220 with a clip-on finned heatsink behind the tab
+const lm = new THREE.Group();
+lm.add(box(10, 15, 4.5, M.ic, -25, T + 3.5 + 7.5, 36));
+lm.add(box(10, 18, 1.3, M.steel, -25, T + 3.5 + 9, 38.9));    // tab
+for (let i = 0; i < 6; i++) lm.add(box(1.2, 22, 12, new THREE.MeshStandardMaterial({ color: 0x2a2d31, metalness: 0.5, roughness: 0.45 }), -31 + i * 2.4, T + 3.5 + 11, 45.5));
+lm.add(box(14, 22, 1.5, new THREE.MeshStandardMaterial({ color: 0x2a2d31, metalness: 0.5, roughness: 0.45 }), -25, T + 3.5 + 11, 40));
+for (let i = 0; i < 3; i++) lm.add(box(0.8, 3.5, 0.5, M.steel, -27.54 + i * 2.54, T + 1.75, 36));
+MB.add(tag(lm, "lm317"));
+
+// R_SET 3 W axial (raised) and the 2512 shunt
 const res = new THREE.Group();
-[[-15, 33], [7, 33]].forEach(([x, z]) => {
-  res.add(box(22, 9, 10, M.ceramic, x, T + 7.5, z));
-  res.add(box(0.8, 3, 0.8, M.steel, x - 13, T + 1.5, z));
-  res.add(box(0.8, 3, 0.8, M.steel, x + 13, T + 1.5, z));
-  res.add(box(27, 0.8, 0.8, M.steel, x, T + 3, z));
-});
+res.add(cyl(2.75, 15.5, M.ceramic, -6, T + 4.75, 38).rotateZ(Math.PI / 2));
+[-16.2, 4.2].forEach(x => res.add(box(0.8, 4.4, 0.8, M.steel, x, T + 2.2, 38)));
+res.add(box(21, 0.8, 0.8, M.steel, -6, T + 4.75, 38));
+res.add(box(6.3, 0.7, 3.2, M.black, 10, T + 0.35, 38));
+[6.9, 13.1].forEach(x => res.add(box(1.4, 0.75, 3.2, M.steel, x, T + 0.37, 38)));
 MB.add(tag(res, "res"));
 
-// ACS712 SOIC-8
-MB.add(tag(box(5, 1.6, 4, M.ic, 5, T + 0.8, 20), "acs"));
 // shift registers SOIC-16
 const sr = new THREE.Group();
-sr.add(box(4, 1.6, 10, M.ic, 7, T + 0.8, -10));
-sr.add(box(4, 1.6, 10, M.ic, 7, T + 0.8, 10));
+sr.add(box(4, 1.6, 10, M.ic, -22, T + 0.8, -7));
+sr.add(box(4, 1.6, 10, M.ic, -22, T + 0.8, 7));
 MB.add(tag(sr, "sr"));
 // 16 SOT-23 MOSFETs in a column
 const fets = new THREE.Group();
-for (let i = 0; i < 16; i++) fets.add(box(1.4, 1.1, 3, M.ic, 17, T + 0.55, -19 + i * 2.5));
+for (let i = 0; i < 16; i++) fets.add(box(1.4, 1.1, 3, M.ic, -8, T + 0.55, -19 + i * 2.5));
 MB.add(tag(fets, "fets"));
-// muxes SOIC-24
+// ten CD4053BE, DIP-16: female tree (back row) and male tree (front row)
 const mux = new THREE.Group();
-mux.add(box(7.5, 2.3, 15.4, M.ic, -24, T + 1.15, 6));
-mux.add(box(7.5, 2.3, 15.4, M.ic, -24, T + 1.15, 21).translateZ(0));
+for (const z of [-12, 12]) for (let k = 0; k < 5; k++) {
+  const x = 2 + k * 8;
+  mux.add(box(6.35, 3.3, 19.3, M.ic, x, T + 0.5 + 1.65, z));
+  mux.add(cyl(0.7, 0.3, M.grey, x, T + 3.35, z - 8.2, 12));             // pin-1 dimple
+  for (let i = 0; i < 8; i++) for (const sx of [-1, 1]) mux.add(box(0.6, 3.2, 0.5, M.steel, x + sx * 3.81, T + 1.6, z - 8.89 + i * 2.54));
+}
 MB.add(tag(mux, "mux"));
-MB.add(tag(box(3, 1.1, 3, M.ic, -9, T + 0.55, 8), "ina"));
-MB.add(tag(box(3, 1.1, 3, M.ic, -9, T + 0.55, 15), "adc"));
-// small passives scattered (decor)
+MB.add(tag(box(3, 1.1, 3, M.ic, 8, T + 0.55, 28), "adc"));
+// small passives (sense resistors by the headers, ADC filters)
 const smalls = new THREE.Group();
 const passive = new THREE.MeshStandardMaterial({ color: 0x8a6d4b, roughness: 0.6 });
-for (let i = 0; i < 26; i++) {
-  const x = -30 + (i % 13) * 3.3, z = 13 + Math.floor(i / 13) * 14;
-  smalls.add(box(1.6, 0.6, 0.8, passive, x, T + 0.3, z - 26));
-}
+for (let i = 0; i < 16; i++) smalls.add(box(1.6, 0.6, 0.8, passive, 39.6, T + 0.3, -19 + i * 2.5));
+for (let i = 0; i < 12; i++) smalls.add(box(1.6, 0.6, 0.8, passive, -2 + (i % 6) * 4, T + 0.3, 25 + Math.floor(i / 6) * 6));
 MB.add(tag(smalls, "main"));
-// LED + JST + jumper
-MB.add(tag(box(2, 1, 1.25, M.led, -38, T + 0.5, -26), "main"));
-const jst = new THREE.Group(); jst.add(box(5, 6, 7.5, new THREE.MeshStandardMaterial({ color: 0xe9e2cf, roughness: 0.7 }), -46, T + 3, -26)); MB.add(tag(jst, "sw"));
-MB.add(tag(box(7.6, 8.5, 2.5, M.black, -17, T + 4.25, 26), "ina"));
+// LED + JST
+MB.add(tag(box(2, 1, 1.25, M.led, 48, T + 0.5, -46), "main"));
+const jst = new THREE.Group(); jst.add(box(7.5, 6, 5, new THREE.MeshStandardMaterial({ color: 0xe9e2cf, roughness: 0.7 }), 57, T + 3, -45)); MB.add(tag(jst, "sw"));
 
 // IDC box headers J2 (outer) and J3 (inner), length along z
 function idcHeader(x, partName) {
@@ -481,12 +483,12 @@ function idcHeader(x, partName) {
   g.add(box(9.2, 8, 46, M.grey, x, T + 13, 0));            // IDC cable socket
   return tag(g, partName);
 }
-MB.add(idcHeader(43, "idc"));
-MB.add(idcHeader(29, "idc"));
+MB.add(idcHeader(60.5, "idc"));
+MB.add(idcHeader(46.5, "idc"));
 
 // ESP32 DevKitC on headers
 const esp = new THREE.Group();
-esp.position.set(-17, T, -24);
+esp.position.set(-38, T, -32);
 esp.add(box(54.4, 8.5, 2.6, M.black, 0, 4.25, -11.4));
 esp.add(box(54.4, 8.5, 2.6, M.black, 0, 4.25, 11.4));
 esp.add(box(54.4, 1.6, 27.9, M.espPcb, 0, 9.3, 0));
@@ -499,7 +501,7 @@ esp.add(box(5, 1.5, 5, M.ic, -8, 10.8, 0));                  // USB-UART
 MB.add(tag(esp, "esp32"));
 
 // ---------- laptop + USB cable ----------
-const LAP = { x: -330, z: 25, y: -12 };                  // laptop sits on the bench left of the base plate
+const LAP = { x: -372, z: 25, y: -12 };                  // laptop sits on the bench left of the base plate
 const lapScreen = document.createElement("canvas"); lapScreen.width = 1024; lapScreen.height = 660;
 const lapTex = new THREE.CanvasTexture(lapScreen); lapTex.colorSpace = THREE.SRGBColorSpace; lapTex.anisotropy = 8;
 const laptop = new THREE.Group();
@@ -521,12 +523,12 @@ laptop.add(lid);
 scene.add(tag(laptop, "laptop"));
 
 // USB cable from the ESP32's Micro-USB socket to the laptop's port
-const usbFrom = new THREE.Vector3(-75 - 17 - 26 - 4, 12.4 + T + 11.6, -24);      // ESP32 USB socket (left end of the DevKitC)
+const usbFrom = new THREE.Vector3(-92.5 - 38 - 26 - 4, 12.4 + T + 11.6, -32);      // ESP32 USB socket (left end of the DevKitC)
 const portLocal = new THREE.Vector3(164, 8, -60);
 laptop.updateMatrixWorld(true);
 const usbTo = laptop.localToWorld(portLocal.clone());
 const usbCurve = new THREE.CatmullRomCurve3([
-  usbFrom, usbFrom.clone().add(V(-14, -1, 0)), V(-146, 10, -26), V(-152, -6, -30),
+  usbFrom, usbFrom.clone().add(V(-14, -1, 0)), V(-186, 10, -34), V(-194, -6, -36),
   usbTo.clone().add(V(24, -6, 2)), usbTo.clone().add(V(8, 0, 0)), usbTo
 ], false, "centripetal");
 const usbGroup = new THREE.Group();
@@ -912,9 +914,9 @@ renderer.domElement.addEventListener("pointermove", e => {
 
 // ---------- views ----------
 const VIEWS = {
-  overview: { pos: V(-260, 300, 430), tgt: V(-70, 30, 0) },
-  laptop:   { pos: V(-296, 160, 200), tgt: V(-352, 100, -108) },
-  main:     { pos: V(-75, 175, 125), tgt: V(-75, 12, 0) },
+  overview: { pos: V(-290, 310, 440), tgt: V(-85, 30, 0) },
+  laptop:   { pos: V(-338, 160, 200), tgt: V(-394, 100, -108) },
+  main:     { pos: V(-92, 205, 150), tgt: V(-92, 12, 0) },
   jack:     { pos: V(60, 95, 120), tgt: V(100, 40, 0) },
 };
 function goView(name, instant) {
@@ -935,7 +937,7 @@ function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
   renderer.setSize(w, h, false); camera.aspect = w / h;
   const narrow = w < 560;
-  VIEWS.overview.pos.set(narrow ? -330 : -260, narrow ? 400 : 300, narrow ? 580 : 430);
+  VIEWS.overview.pos.set(narrow ? -360 : -290, narrow ? 420 : 310, narrow ? 600 : 440);
   camera.updateProjectionMatrix();
 }
 new ResizeObserver(resize).observe(stage);

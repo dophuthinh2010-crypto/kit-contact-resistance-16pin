@@ -154,7 +154,10 @@ class MainWindow(QMainWindow):
         self.calclear_btn = QPushButton("Clear calibration")
         g.addWidget(self.scan_btn, 0, 0); g.addWidget(self.measure_btn, 0, 1)
         g.addWidget(self.auto_cb, 1, 0, 1, 2)
-        g.addWidget(QLabel("INA333 gain (match JP1)"), 2, 0); gl = QHBoxLayout(); gl.addWidget(self.gain_box); gl.addWidget(self.gain_btn)
+        self.gain_lbl = QLabel("INA333 gain (match JP1)")
+        self.gain_fixed = QLabel("ADS1115 ±0.256 V (board rev C, no gain setting)")
+        self.gain_fixed.setVisible(False)
+        g.addWidget(self.gain_lbl, 2, 0); gl = QHBoxLayout(); gl.addWidget(self.gain_box); gl.addWidget(self.gain_btn); gl.addWidget(self.gain_fixed)
         g.addLayout(gl, 2, 1)
         g.addWidget(self.setcycle_btn, 3, 0, 1, 2)
         g.addWidget(self.calzero_btn, 4, 0); g.addWidget(self.calref_btn, 4, 1)
@@ -394,9 +397,17 @@ class MainWindow(QMainWindow):
             return
         if isinstance(msg, Hello):
             self.device_cycle = msg.cycle
-            self.device_lbl.setText(f"Kit firmware {msg.firmware} · gain {msg.gain} · cycle counter {msg.cycle}"
+            rev_c = msg.gain == 16                 # firmware 0.5+ reports the fixed ADS1115 PGA gain (board rev C)
+            gain_txt = "ADS1115 ±0.256 V (rev C)" if rev_c else f"gain {msg.gain}"
+            self.device_lbl.setText(f"Kit firmware {msg.firmware} · {gain_txt} · cycle counter {msg.cycle}"
                                     + ("  (simulator)" if self.link.port_name == SIMULATOR else ""))
-            self.gain_box.setCurrentText(str(msg.gain))
+            for w in (self.gain_box, self.gain_btn):
+                w.setVisible(not rev_c)
+            self.gain_fixed.setVisible(rev_c)
+            self.gain_lbl.setText("Measurement range" if rev_c else "INA333 gain (match JP1)")
+            if not rev_c:
+                self.gain_box.setCurrentText(str(msg.gain))
+            self.rev_c = rev_c
         elif isinstance(msg, CycleStart):
             self.trigger = msg.trigger
             self.device_cycle = msg.cycle
@@ -465,7 +476,7 @@ class MainWindow(QMainWindow):
             "started": datetime.now().isoformat(timespec="seconds"),
             "fail_limit_mOhm": f"{self.limit_sb.value():.1f}",
             "fail_consecutive": str(self.consec_sb.value()),
-            "ina_gain": self.gain_box.currentText(),
+            "ina_gain": "ADS1115 PGA 0.256 V" if getattr(self, "rev_c", False) else self.gain_box.currentText(),
             "port": self.link.port_name or "",
             "app_version": __version__,
         }

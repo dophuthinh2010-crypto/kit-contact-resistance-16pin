@@ -1,7 +1,7 @@
 (kicad_pcb (version 20240108) (generator "pcbnew") (generator_version "8.0")
   (general (thickness 1.6) (legacy_teardrops no))
   (paper "A3")
-  (title_block (title "CR-TEST jack board female") (date "2026-11-19") (rev "B") (company "CR-TEST"))
+  (title_block (title "CR-TEST jack board female") (date "2026-11-23") (rev "C") (company "CR-TEST"))
   (layers
     (0 "F.Cu" signal) (31 "B.Cu" signal)
     (32 "B.Adhes" user "B.Adhesive") (33 "F.Adhes" user "F.Adhesive")
@@ -141,6 +141,6 @@
     (fp_circle (center 0 0) (end 3.2 0) (stroke (width 0.05) (type default)) (fill none) (layer "F.CrtYd") (uuid "a0af02ae-2674-5c8e-8804-2e6766bd01f9"))
     (pad "" np_thru_hole circle (at 0 0) (size 3.2 3.2) (drill 3.2) (layers "*.Cu" "*.Mask") (uuid "9e92ee75-992c-597e-960d-a3afdfe87639"))
   )
-  (gr_text "CR-TEST FEMALE rev B" (at 55 77.5) (layer "F.SilkS") (uuid "738918ed-b28c-5fdf-840b-4ec82c736680") (effects (font (size 1.0 1.0) (thickness 0.15)) (justify left)))
+  (gr_text "CR-TEST FEMALE rev C" (at 55 77.5) (layer "F.SilkS") (uuid "738918ed-b28c-5fdf-840b-4ec82c736680") (effects (font (size 1.0 1.0) (thickness 0.15)) (justify left)))
   (gr_text "Kelvin: force and sense leave each pad on opposite sides" (at 55 88.6) (layer "F.SilkS") (uuid "cce865ae-c2d2-5330-9d3e-f4e1becceb3e") (effects (font (size 0.7 0.7) (thickness 0.105)) (justify left)))
 )

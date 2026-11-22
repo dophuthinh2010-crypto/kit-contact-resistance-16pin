@@ -10,9 +10,10 @@ every plug/unplug cycle. The data is used to estimate connector life
 ## How it works
 
 - ESP32 selects one contact at a time (16 low-side MOSFETs driven by 2 × 74HC595).
-- About 0.62 A flows through the selected contact. The ACS712 measures the current I.
-- Kelvin sense taps at the connector pads go through 2 × CD74HC4067 muxes to an
-  INA333 (gain 101), then to an ADS1115 16-bit ADC: contact voltage V.
+- An LM317T constant-current source drives 0.625 A through the selected contact; a 0.1 Ω shunt read by
+  the ADS1115 gives the current I. (Main board rev C.)
+- Kelvin sense taps at the connector pads go through two 16-to-1 trees of CD4053BE switches straight to
+  the ADS1115, read differentially at ±0.256 V (7.8 µV per step): contact voltage V.
 - R = V / I. Range is about 0–51 mΩ (G = 101) or 0–470 mΩ (G = 11, jumper).
 - One CSV line per pin per cycle over USB serial: `cycle, pin, I_A, V_mV, R_mOhm`.
 
@@ -29,13 +30,13 @@ linked by 34-way IDC ribbons (16 force + 16 sense + 2 GND).
 | `docs/footprint_preview.png` | Preview of the connector footprints |
 | `docs/CR-TEST_presentation.pptx` | 13-slide PowerPoint presentation of the kit (source: `docs/presentation/build_deck.js`, pptxgenjs) |
 | `docs/3d-model/index.html` | Interactive 3D model of the kit (open in a browser; loads three.js from a CDN) |
-| `docs/fault-protection.md` | Open/short fault review, isolation test, rev B protection changes, scenario results |
+| `docs/fault-protection.md` | Open/short fault review, isolation test, rev C protection, scenario results |
 | `docs/serial-protocol.md` | Serial protocol between the ESP32 and the laptop |
 | `firmware/crkit_esp32/` | ESP32 firmware (Arduino): scan, mate detect, calibration |
 | `desktop-app/` | Desktop app (Python, PySide6): connect, record to CSV, live table and plot |
-| `docs/simulation/index.html` | 3D simulation: plug/unplug cycles, 16-pin scan through the ACS712 / INA333 / ADS1115 chain with noise, assumed wear model and life estimate |
-| `hardware/BOM.xlsx`, `hardware/BOM.csv` | Bill of materials for one kit (rev B, $154.55): model, supplier, price, alternative part (shared sheet: https://claude.ai/artifact/EmcHuasxRLR5GvdHxSPXVu) |
-| `hardware/kicad/` | **Rev B KiCad 8 projects**: main board (schematic + placed PCB), female and male jack boards, shared libraries, previews. Not routed yet: see `hardware/kicad/README.md` |
+| `docs/simulation/index.html` | 3D simulation: plug/unplug cycles, 16-pin scan through the rev C LM317T / CD4053B / ADS1115 chain with noise, assumed wear model and life estimate |
+| `hardware/BOM.xlsx`, `hardware/BOM.csv` | Bill of materials for one kit (rev C, $156.22): model, supplier, price, alternative part (shared sheet: https://claude.ai/artifact/EmcHuasxRLR5GvdHxSPXVu) |
+| `hardware/kicad/` | **Rev C KiCad 8 projects**: main board (schematic + placed PCB), female and male jack boards, shared libraries, previews. Not routed yet: see `hardware/kicad/README.md` |
 | `hardware/scripts/kicad_gen/` | Python generator for those projects (`python build_all.py`) |
 | `hardware/footprints/McMurdo_RedRange.pretty/` | KiCad footprints for RP16-T and RS16P-T |
 | `hardware/scripts/gen_mcmurdo_fp.py` | Script that generates those footprints |
@@ -57,7 +58,7 @@ KiCad → Preferences → Manage Footprint Libraries → add
 ## Next steps
 
 - [ ] Review the design summary and open items
-- [x] Schematic rev B in KiCad (main board + jack boards, generated)
+- [x] Schematic rev C in KiCad (LM317T, CD4053BE, ADS1115; main board + jack boards, generated)
 - [x] PCB placement, nets, net classes, outlines, GND pours
 - [ ] Open in KiCad 8, run ERC/DRC, route (hand-route power, Freerouting for the rest)
 - [ ] Check footprints against real parts, then order PCBs

@@ -120,9 +120,9 @@ The simulated kit speaks the same protocol as the firmware; its contact wear is 
 
 1. Power the kit (adapter), then plug in the USB cable.
 2. Start the app. In **Port**, pick the entry marked **← ESP32** and click **Connect**.
-3. The top line should show `Kit firmware 0.1.0 · gain 101 · cycle counter …`.
-4. Under **Kit control**, set **INA333 gain** to the same value as jumper **JP1** on the main board
-   (G101 for normal contacts) and click **Set gain**.
+3. The top line should show `Kit firmware 0.5.0 · ADS1115 ±0.256 V (rev C) · cycle counter …`.
+4. Rev C has no gain setting, so there is nothing to set here. (Board rev A/B only: set **INA333 gain** to
+   the same value as jumper **JP1**, G101 for normal contacts, and click **Set gain**.)
 
 ### 5.2 Calibrate (once per kit, and after any hardware change)
 
@@ -198,7 +198,7 @@ the USB driver from section 2.
 | `Could not open COM5: Access is denied` | Another program has the port: close the Arduino Serial Monitor or another app window. |
 | Connected, but no `Kit firmware …` line | Press **EN** on the ESP32, or type `STATUS` in the console. If still nothing, re-upload the firmware (section 4). |
 | Every pin shows **OPEN** | The 5 V adapter is off, a ribbon cable is unplugged, or the connector is not mated. |
-| Pins show **OVER** | Resistance is above the range for this gain. Set JP1 to G11 and click **Set gain** with 11. |
+| Pins show **OVER** | Resistance is above the range: about 400 mΩ on rev C (check the ribbon and the jack board). On rev A/B set JP1 to G11 and click **Set gain** with 11. |
 | Pins show **UNDER** | Reading below about 1 mΩ at G101: normal right after a zero calibration with the shorting bar. |
 | Status bar: *5 V rail reads …* | The adapter is too weak or the barrel jack is loose. Use a 5 V 2 A adapter. |
 | Readings jump around | Check the ribbon cables are fully seated, keep them away from the 5 W resistors, recalibrate. |
