@@ -245,6 +245,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
+const V = (x, y, z = 0) => new THREE.Vector3(x, y, z);
 const PARTS = {
   kit:      { ref: "KIT", name: "Complete kit", text: "Main board, two jack boards, two ribbon cables and a plug/unplug fixture on one base plate." },
   main:     { ref: "PCB-1", name: "Main board (rev C)", text: "135 × 101 mm, 2-layer, 2 oz copper. Power and the LM317T current source at the front, ESP32 at the back left, pin switches and ten CD4053BE muxes in the middle, ribbon headers on the fixture side." },
@@ -685,7 +686,6 @@ function ribbonGeometry(points, width) {
 const ribM = new THREE.Mesh(new THREE.BufferGeometry(), ribbonMat);
 const ribF = new THREE.Mesh(new THREE.BufferGeometry(), ribbonMat);
 scene.add(tag(ribM, "ribbon")); scene.add(tag(ribF, "ribbon"));
-const V = (x, y, z = 0) => new THREE.Vector3(x, y, z);
 const J3x = -75 + 29, J2x = -75 + 43, Jtop = 12.4 + T + 17;
 function updateRibbons(xm) {
   ribM.geometry.dispose();
